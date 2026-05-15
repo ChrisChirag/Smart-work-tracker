@@ -17,6 +17,9 @@ const NAV = [
 export function MobileNav() {
   const pathname = usePathname();
 
+  // Don't show nav on auth pages
+  if (pathname.startsWith("/auth")) return null;
+
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t bg-card/95 backdrop-blur-md">
       <div className="flex items-center justify-around px-2 py-2">
@@ -35,9 +38,7 @@ export function MobileNav() {
               <span className={cn("text-[10px] font-medium", active && "font-semibold")}>
                 {label}
               </span>
-              {active && (
-                <span className="h-1 w-1 rounded-full bg-primary" />
-              )}
+              {active && <span className="h-1 w-1 rounded-full bg-primary" />}
             </Link>
           );
         })}

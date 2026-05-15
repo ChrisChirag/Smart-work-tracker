@@ -2,7 +2,8 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { format } from "date-fns";
 import { generateId } from "@/lib/utils";
-import type { Task, Project, Tag, Priority, TaskStatus } from "@/lib/types";
+// format is used in getOverdueTasks
+import type { Task, Project, Tag, TaskStatus } from "@/lib/types";
 
 interface Store {
   tasks: Task[];
@@ -32,90 +33,12 @@ interface Store {
   getOverdueTasks: () => Task[];
 }
 
-const SAMPLE_PROJECTS: Project[] = [
-  {
-    id: "p1",
-    name: "Website Redesign",
-    description: "Modernize the company website",
-    color: "#6366f1",
-    emoji: "🌐",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "p2",
-    name: "Mobile App",
-    description: "iOS & Android application",
-    color: "#8b5cf6",
-    emoji: "📱",
-    createdAt: new Date().toISOString(),
-  },
-];
-
-const SAMPLE_TAGS: Tag[] = [
-  { id: "t1", name: "Design", color: "#ec4899" },
-  { id: "t2", name: "Dev", color: "#6366f1" },
-  { id: "t3", name: "Meeting", color: "#f97316" },
-  { id: "t4", name: "Review", color: "#eab308" },
-];
-
-const today = format(new Date(), "yyyy-MM-dd");
-
-const SAMPLE_TASKS: Task[] = [
-  {
-    id: "task1",
-    title: "Design new landing page mockup",
-    description: "Create wireframes and high-fidelity mockups for the hero section",
-    status: "in_progress",
-    priority: "high",
-    projectId: "p1",
-    tagIds: ["t1"],
-    dueDate: today,
-    scheduledDate: today,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "task2",
-    title: "Review API endpoints documentation",
-    description: "Go through the updated API docs and flag any inconsistencies",
-    status: "todo",
-    priority: "medium",
-    projectId: "p2",
-    tagIds: ["t2", "t4"],
-    dueDate: today,
-    scheduledDate: today,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "task3",
-    title: "Set up CI/CD pipeline",
-    status: "todo",
-    priority: "urgent",
-    projectId: "p2",
-    tagIds: ["t2"],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "task4",
-    title: "Weekly team sync meeting",
-    status: "done",
-    priority: "low",
-    tagIds: ["t3"],
-    scheduledDate: today,
-    completedAt: new Date().toISOString(),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
-
 export const useStore = create<Store>()(
   persist(
     (set, get) => ({
-      tasks: SAMPLE_TASKS,
-      projects: SAMPLE_PROJECTS,
-      tags: SAMPLE_TAGS,
+      tasks: [],
+      projects: [],
+      tags: [],
 
       addTask: (taskData) => {
         const task: Task = {
