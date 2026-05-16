@@ -39,20 +39,20 @@ export function TaskCard({ task, compact }: TaskCardProps) {
     <>
       <div
         className={cn(
-          "group relative rounded-xl border bg-card transition-all hover:shadow-md hover:border-primary/30",
+          "group relative rounded-xl border bg-card transition-all duration-200 hover:shadow-md hover:border-primary/30 hover:-translate-y-px",
           task.status === "done" && "opacity-60",
           compact ? "p-3" : "p-4"
         )}
       >
-        {/* Priority stripe */}
+        {/* Priority stripe — thicker, full-height, only right corners rounded */}
         <div
           className={cn(
-            "absolute left-0 top-3 bottom-3 w-1 rounded-r-full",
+            "absolute left-0 top-0 bottom-0 w-1.5 rounded-l-xl rounded-r-none",
             priority.dot
           )}
         />
 
-        <div className="pl-3">
+        <div className="pl-4">
           {/* Header row */}
           <div className="flex items-start gap-2">
             <button
@@ -73,7 +73,7 @@ export function TaskCard({ task, compact }: TaskCardProps) {
               <p
                 className={cn(
                   "font-medium leading-snug",
-                  task.status === "done" && "line-through text-muted-foreground"
+                  task.status === "done" && "line-through text-muted-foreground/60"
                 )}
               >
                 {task.title}
@@ -141,13 +141,13 @@ export function TaskCard({ task, compact }: TaskCardProps) {
               </div>
             </div>
 
-            {/* Actions */}
+            {/* Actions — always slightly visible on mobile */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="h-8 w-8 shrink-0 opacity-30 group-hover:opacity-100 transition-opacity touch-manipulation"
                 >
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>

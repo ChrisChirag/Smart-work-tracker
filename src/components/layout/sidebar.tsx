@@ -31,10 +31,13 @@ export function Sidebar() {
   const user = session?.user;
 
   return (
-    <aside className="hidden md:flex flex-col w-60 h-screen sticky top-0 border-r bg-card">
+    <aside className="hidden md:flex flex-col w-60 h-screen sticky top-0 border-r bg-card overflow-hidden">
+      {/* Gradient accent line at top */}
+      <div className="h-1 w-full bg-gradient-to-r from-indigo-500 to-violet-500 shrink-0" />
+
       {/* Logo */}
-      <div className="flex items-center gap-2.5 px-4 py-5 border-b">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+      <div className="flex items-center gap-2.5 px-4 py-4 border-b">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
           <Zap className="h-4 w-4" />
         </div>
         <div>
@@ -44,7 +47,7 @@ export function Sidebar() {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 p-3 space-y-1">
+      <nav className="flex-1 p-3 space-y-0.5">
         {NAV.map(({ href, icon: Icon, label }) => {
           const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
           return (
@@ -52,12 +55,16 @@ export function Sidebar() {
               key={href}
               href={href}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
+                "relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
                 active
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "text-muted-foreground hover:bg-accent hover:text-foreground"
               )}
             >
+              {/* Active left indicator bar */}
+              {active && (
+                <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r-full bg-primary-foreground/60" />
+              )}
               <Icon className="h-4 w-4 shrink-0" />
               {label}
             </Link>
@@ -65,19 +72,19 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Quick stats */}
+      {/* Quick stats — styled as a mini card with subtle gradient */}
       <div className="px-3 pb-2">
-        <div className="rounded-lg bg-muted p-3">
-          <p className="text-xs font-medium">Quick Stats</p>
-          <div className="mt-2 space-y-1">
+        <div className="rounded-xl bg-gradient-to-br from-muted/80 to-muted p-3 border border-border/50">
+          <p className="text-xs font-semibold text-foreground/70 uppercase tracking-wide mb-2">Quick Stats</p>
+          <div className="space-y-1.5">
             {[
               { label: "Total", value: tasks.length },
               { label: "Done", value: tasks.filter((t) => t.status === "done").length },
               { label: "Pending", value: pendingCount },
             ].map(({ label, value }) => (
-              <div key={label} className="flex justify-between text-xs text-muted-foreground">
-                <span>{label}</span>
-                <span className="font-medium text-foreground">{value}</span>
+              <div key={label} className="flex justify-between text-xs">
+                <span className="text-muted-foreground">{label}</span>
+                <span className="font-semibold text-foreground">{value}</span>
               </div>
             ))}
           </div>
@@ -89,20 +96,20 @@ export function Sidebar() {
         <div className="p-3 border-t">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex w-full items-center gap-2.5 rounded-lg p-2 hover:bg-accent transition-colors text-left">
+              <button className="flex w-full items-center gap-3 rounded-xl p-2.5 hover:bg-accent transition-all hover:shadow-sm text-left group">
                 {user.image ? (
                   <img
                     src={user.image}
                     alt={user.name ?? "User"}
-                    className="h-8 w-8 rounded-full object-cover ring-2 ring-primary/20"
+                    className="h-9 w-9 rounded-full object-cover ring-2 ring-primary/20 group-hover:ring-primary/40 transition-all shrink-0"
                   />
                 ) : (
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-semibold">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-white text-sm font-semibold shrink-0 shadow-sm">
                     {user.name?.[0]?.toUpperCase() ?? "U"}
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{user.name}</p>
+                  <p className="text-sm font-semibold truncate">{user.name}</p>
                   <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                 </div>
               </button>

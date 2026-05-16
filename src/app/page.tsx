@@ -1,32 +1,35 @@
 "use client";
 
 import React, { useState } from "react";
-import { format, isToday, parseISO } from "date-fns";
+import { format } from "date-fns";
 import { useStore } from "@/store";
 import { Header } from "@/components/layout/header";
 import { TaskCard } from "@/components/tasks/task-card";
 import { TaskForm } from "@/components/tasks/task-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { DashboardSkeleton } from "@/components/dashboard/loading-skeleton";
 import { PRIORITY_CONFIG } from "@/lib/utils";
 import {
   CheckCircle2, Clock, ListTodo, AlertTriangle,
-  TrendingUp, Plus, ArrowRight, Zap,
+  TrendingUp, Plus, ArrowRight, Zap, Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 import type { Priority } from "@/lib/types";
 
 function StatCard({
-  label, value, icon: Icon, color, sub,
+  label, value, icon: Icon, color, borderColor, sub,
 }: {
   label: string;
   value: number;
   icon: React.ElementType;
   color: string;
+  borderColor: string;
   sub?: string;
 }) {
   return (
-    <Card className="relative overflow-hidden">
+    <Card className={`relative overflow-hidden border-l-4 ${borderColor}`}>
       <CardContent className="p-4 md:p-5">
         <div className="flex items-center justify-between">
           <div>
@@ -44,7 +47,7 @@ function StatCard({
 }
 
 export default function Dashboard() {
-  const { tasks, projects, getOverdueTasks } = useStore();
+  const { tasks, projects, getOverdueTasks, isLoaded } = useStore();
   const [addOpen, setAddOpen] = useState(false);
   const today = format(new Date(), "yyyy-MM-dd");
   const greeting = getGreeting();
@@ -64,6 +67,23 @@ export default function Dashboard() {
     ? Math.round((doneTasks.length / tasks.length) * 100)
     : 0;
 
+  const todayDone = todayTasks.filter((t) => t.status === "done").length;
+  const todayProgressPct = todayTasks.length
+    ? Math.round((todayDone / todayTasks.length) * 100)
+    : 0;
+
+  if (!isLoaded) {
+    return (
+      <>
+        <Header
+          title={`${greeting} 👋`}
+          subtitle={format(new Date(), "EEEE, MMMM d, yyyy")}
+        />
+        <DashboardSkeleton />
+      </>
+    );
+  }
+
   return (
     <>
       <Header
@@ -72,6 +92,48 @@ export default function Dashboard() {
       />
 
       <div className="p-4 md:p-6 space-y-6">
+        {/* Welcome banner */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 p-5 md:p-6 text-white shadow-lg">
+          <div className="relative z-10">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-indigo-100 mb-0.5">
+                  {format(new Date(), "EEEE, MMMM d, yyyy")}
+                </p>
+                <h2 className="text-xl md:text-2xl font-bold leading-tight">
+                  {greeting}! Ready to crush it?
+                </h2>
+                {todayTasks.length > 0 ? (
+                  <div className="mt-4 space-y-1.5">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-indigo-100">Today&apos;s progress</span>
+                      <span className="font-semibold">
+                        {todayDone} / {todayTasks.length} tasks
+                      </span>
+                    </div>
+                    <Progress value={todayProgressPct} />
+                    <p className="text-xs text-indigo-200">
+                      {todayProgressPct === 100
+                        ? "All done for today!"
+                        : `${todayProgressPct}% complete — keep going!`}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="mt-3 text-sm text-indigo-100">
+                    No tasks scheduled yet — add one to get started.
+                  </p>
+                )}
+              </div>
+              <div className="hidden sm:flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 shrink-0">
+                <Sparkles className="h-7 w-7 text-white" />
+              </div>
+            </div>
+          </div>
+          {/* Decorative blobs */}
+          <div className="absolute -right-8 -top-8 h-36 w-36 rounded-full bg-white/5" />
+          <div className="absolute -right-4 -bottom-10 h-28 w-28 rounded-full bg-white/5" />
+        </div>
+
         {/* Stats grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
           <StatCard
@@ -79,26 +141,30 @@ export default function Dashboard() {
             value={todayTasks.length}
             icon={ListTodo}
             color="bg-primary/10 text-primary"
-            sub={`${todayTasks.filter((t) => t.status === "done").length} done`}
+            borderColor="border-l-primary"
+            sub={`${todayDone} done`}
           />
           <StatCard
             label="In Progress"
             value={inProgressTasks.length}
             icon={Clock}
             color="bg-violet-100 text-violet-600 dark:bg-violet-950 dark:text-violet-400"
+            borderColor="border-l-violet-500"
           />
           <StatCard
             label="Overdue"
             value={overdueTasks.length}
             icon={AlertTriangle}
             color="bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400"
+            borderColor="border-l-red-500"
           />
           <StatCard
             label="Completed"
             value={doneTasks.length}
             icon={CheckCircle2}
             color="bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400"
-            sub={`${completionRate}% completion`}
+            borderColor="border-l-emerald-500"
+            sub={`${completionRate}% overall`}
           />
         </div>
 
@@ -122,15 +188,26 @@ export default function Dashboard() {
             {todayTasks.length === 0 ? (
               <Card className="border-dashed">
                 <CardContent className="flex flex-col items-center justify-center py-10 text-center">
-                  <CheckCircle2 className="h-10 w-10 text-muted-foreground/30 mb-3" />
+                  {/* Illustrated icon area */}
+                  <div className="relative mb-4">
+                    <div className="h-20 w-20 rounded-full bg-gradient-to-br from-indigo-50 to-violet-50 dark:from-indigo-950/50 dark:to-violet-950/50 flex items-center justify-center">
+                      <CheckCircle2 className="h-9 w-9 text-primary/40" />
+                    </div>
+                    <div className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full bg-gradient-to-br from-indigo-100 to-violet-100 dark:from-indigo-900 dark:to-violet-900 flex items-center justify-center">
+                      <Plus className="h-4 w-4 text-primary/60" />
+                    </div>
+                  </div>
                   <p className="text-sm font-medium text-muted-foreground">
                     No tasks scheduled for today
+                  </p>
+                  <p className="text-xs text-muted-foreground/70 mt-1 mb-4">
+                    A clear schedule — use it wisely!
                   </p>
                   <Button
                     size="sm"
                     variant="outline"
-                    className="mt-4"
                     onClick={() => setAddOpen(true)}
+                    className="gap-1.5"
                   >
                     <Plus className="h-4 w-4" />
                     Schedule something
