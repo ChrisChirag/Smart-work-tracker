@@ -16,8 +16,10 @@ import {
 } from "@/components/ui/dialog";
 import { PRIORITY_CONFIG } from "@/lib/utils";
 import type { Task, Priority, TaskStatus } from "@/lib/types";
-import { Tag, Calendar, Folder, Flag, Clock, Plus, X, Trash2, Zap } from "lucide-react";
+import { Tag, Folder, Flag, Plus, X, Trash2, Zap } from "lucide-react";
 import { cn, PROJECT_COLORS } from "@/lib/utils";
+import { DatePicker } from "@/components/ui/date-picker";
+import { TimePicker } from "@/components/ui/time-picker";
 
 interface TaskFormProps {
   open: boolean;
@@ -304,43 +306,31 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, de
           {/* Dates */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5">
-                <Calendar className="h-3.5 w-3.5" />
-                Due Date
-              </Label>
-              <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+              <Label>Due Date</Label>
+              <DatePicker value={dueDate} onChange={setDueDate} placeholder="No due date" />
             </div>
             <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5">
-                <Calendar className="h-3.5 w-3.5" />
-                Schedule
-              </Label>
-              <Input
-                type="date"
+              <Label>Schedule</Label>
+              <DatePicker
                 value={scheduledDate}
-                onChange={(e) => {
-                  setScheduledDate(e.target.value);
-                  if (!e.target.value) setScheduledTime("");
+                onChange={(v) => {
+                  setScheduledDate(v);
+                  if (!v) setScheduledTime("");
                 }}
+                placeholder="Not scheduled"
               />
             </div>
           </div>
 
-          {/* Time — shown only when a scheduled date is set */}
-          {scheduledDate && (
-            <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5">
-                <Clock className="h-3.5 w-3.5" />
-                Time
-                <span className="text-muted-foreground font-normal text-xs">(optional — places task on calendar)</span>
-              </Label>
-              <Input
-                type="time"
-                value={scheduledTime}
-                onChange={(e) => setScheduledTime(e.target.value)}
-              />
-            </div>
-          )}
+          {/* Time */}
+          <div className="space-y-1.5">
+            <Label>Time <span className="text-muted-foreground font-normal text-xs">(optional override)</span></Label>
+            <TimePicker
+              value={scheduledTime}
+              onChange={setScheduledTime}
+              placeholder="Auto-assigned by priority"
+            />
+          </div>
 
           {tags.length > 0 && (
             <div className="space-y-1.5">
