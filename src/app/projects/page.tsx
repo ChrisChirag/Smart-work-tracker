@@ -15,6 +15,7 @@ import { PROJECT_COLORS, PROJECT_EMOJIS, cn, generateId } from "@/lib/utils";
 import { Plus, Folder, CheckCircle2, Clock, Circle, Trash2, Pencil, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
+import { Skeleton } from "@/components/ui/skeleton";
 
 function ProjectForm({
   open, onClose, editId,

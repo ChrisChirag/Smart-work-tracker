@@ -7,6 +7,7 @@ import { TaskCard } from "@/components/tasks/task-card";
 import { TaskForm } from "@/components/tasks/task-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -19,7 +20,7 @@ type SortKey = "createdAt" | "dueDate" | "priority" | "title";
 const PRIORITY_ORDER: Record<Priority, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
 
 export default function TasksPage() {
-  const { tasks, projects, tags } = useStore();
+  const { tasks, projects, tags, isLoaded } = useStore();
   const [search, setSearch] = useState("");
   const [filterPriority, setFilterPriority] = useState<string>("all");
   const [filterProject, setFilterProject] = useState<string>("all");
@@ -57,6 +58,27 @@ export default function TasksPage() {
     in_progress: tasks.filter((t) => t.status === "in_progress").length,
     done: tasks.filter((t) => t.status === "done").length,
   };
+
+  if (!isLoaded) {
+    return (
+      <>
+        <Header title="Tasks" />
+        <div className="p-4 md:p-6 space-y-4">
+          <Skeleton className="h-10 w-full rounded-lg" />
+          <div className="flex gap-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-8 w-24 rounded-lg" />
+            ))}
+          </div>
+          <div className="space-y-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-20 w-full rounded-xl" />
+            ))}
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
