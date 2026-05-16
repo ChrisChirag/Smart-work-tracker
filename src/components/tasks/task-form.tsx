@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
+import { format } from "date-fns";
 import { useStore } from "@/store";
+import { pickSlotForPriority } from "@/lib/schedule";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,7 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { PRIORITY_CONFIG } from "@/lib/utils";
 import type { Task, Priority, TaskStatus } from "@/lib/types";
-import { Tag, Calendar, Folder, Flag, Clock, Plus, X, Trash2 } from "lucide-react";
+import { Tag, Calendar, Folder, Flag, Clock, Plus, X, Trash2, Zap } from "lucide-react";
 import { cn, PROJECT_COLORS } from "@/lib/utils";
 
 interface TaskFormProps {
@@ -27,7 +29,7 @@ interface TaskFormProps {
 }
 
 export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, defaultProjectId }: TaskFormProps) {
-  const { projects, tags, addTask, updateTask, deleteTask, addProject } = useStore();
+  const { tasks, projects, tags, addTask, updateTask, deleteTask, addProject } = useStore();
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const [title, setTitle] = useState(editTask?.title ?? "");
@@ -64,6 +66,16 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, de
     e.preventDefault();
     if (!title.trim()) return;
 
+    let finalDate = scheduledDate;
+    let finalTime = scheduledTime;
+
+    // Auto-assign time for new tasks that have no scheduled time
+    if (!editTask && !finalTime) {
+      if (!finalDate) finalDate = format(new Date(), "yyyy-MM-dd");
+      const slot = pickSlotForPriority(priority, tasks, finalDate);
+      if (slot) finalTime = slot;
+    }
+
     const taskData = {
       title: title.trim(),
       description: description.trim() || undefined,
@@ -72,8 +84,8 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, de
       projectId: projectId || undefined,
       tagIds: selectedTagIds,
       dueDate: dueDate || undefined,
-      scheduledDate: scheduledDate || undefined,
-      scheduledTime: scheduledTime || undefined,
+      scheduledDate: finalDate || undefined,
+      scheduledTime: finalTime || undefined,
       completedAt: editTask?.completedAt,
     };
 
@@ -360,6 +372,23 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, de
               </div>
             </div>
           )}
+
+          {/* Auto-schedule preview — only for new tasks with no time set */}
+          {!editTask && !scheduledTime && (() => {
+            const previewDate = scheduledDate || format(new Date(), "yyyy-MM-dd");
+            const slot = pickSlotForPriority(priority, tasks, previewDate);
+            if (!slot) return null;
+            return (
+              <div className="flex items-center gap-2 rounded-lg bg-primary/5 border border-primary/20 px-3 py-2 text-xs text-primary">
+                <Zap className="h-3.5 w-3.5 shrink-0" />
+                <span>
+                  Will be auto-scheduled at <strong>{slot}</strong>
+                  {!scheduledDate && " today"}
+                  {" "}based on <strong>{priority}</strong> priority
+                </span>
+              </div>
+            );
+          })()}
 
           <DialogFooter className="pt-2">
             {editTask && !confirmDelete && (

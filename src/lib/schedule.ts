@@ -78,6 +78,27 @@ function closestSlot(preferred: number, free: number[]): number | null {
   );
 }
 
+// Pick the best available 30-min slot for a single task's priority on a given date.
+// Returns a "HH:MM" string, or undefined if the working day is full.
+export function pickSlotForPriority(
+  priority: Priority,
+  alreadyScheduled: Task[],
+  date: string
+): string | undefined {
+  const occupiedMins = new Set<number>(
+    alreadyScheduled
+      .filter((t) => t.scheduledTime && t.scheduledDate === date)
+      .map((t) => {
+        const [h, m] = (t.scheduledTime as string).split(":").map(Number);
+        return h * 60 + m;
+      })
+  );
+  const preferred = PRIORITY_START[priority];
+  const free = buildFreeSlots(occupiedMins);
+  const start = closestSlot(preferred, free);
+  return start !== null ? minsToTime(start) : undefined;
+}
+
 export function autoSchedule(
   candidates: Task[],
   alreadyScheduled: Task[],
