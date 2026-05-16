@@ -14,8 +14,8 @@ import {
 } from "@/components/ui/dialog";
 import { PRIORITY_CONFIG } from "@/lib/utils";
 import type { Task, Priority, TaskStatus } from "@/lib/types";
-import { Tag, Calendar, Folder, Flag, Clock } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Tag, Calendar, Folder, Flag, Clock, Plus, X } from "lucide-react";
+import { cn, PROJECT_COLORS, PROJECT_EMOJIS } from "@/lib/utils";
 
 interface TaskFormProps {
   open: boolean;
@@ -27,7 +27,7 @@ interface TaskFormProps {
 }
 
 export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, defaultProjectId }: TaskFormProps) {
-  const { projects, tags, addTask, updateTask } = useStore();
+  const { projects, tags, addTask, updateTask, addProject } = useStore();
 
   const [title, setTitle] = useState(editTask?.title ?? "");
   const [description, setDescription] = useState(editTask?.description ?? "");
@@ -38,6 +38,22 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, de
   const [scheduledDate, setScheduledDate] = useState(editTask?.scheduledDate ?? defaultDate ?? "");
   const [scheduledTime, setScheduledTime] = useState(editTask?.scheduledTime ?? defaultTime ?? "");
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>(editTask?.tagIds ?? []);
+
+  // Inline new-project creation
+  const [showNewProj, setShowNewProj] = useState(false);
+  const [newProjName, setNewProjName] = useState("");
+  const [newProjColor, setNewProjColor] = useState(PROJECT_COLORS[0]);
+  const [newProjEmoji, setNewProjEmoji] = useState(PROJECT_EMOJIS[0]);
+
+  const handleCreateProject = () => {
+    if (!newProjName.trim()) return;
+    const proj = addProject({ name: newProjName.trim(), description: "", color: newProjColor, emoji: newProjEmoji });
+    setProjectId(proj.id);
+    setShowNewProj(false);
+    setNewProjName("");
+    setNewProjColor(PROJECT_COLORS[0]);
+    setNewProjEmoji(PROJECT_EMOJIS[0]);
+  };
 
   const toggleTag = (tagId: string) => {
     setSelectedTagIds((prev) =>
@@ -81,6 +97,10 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, de
       setScheduledDate(defaultDate ?? "");
       setScheduledTime(defaultTime ?? "");
       setSelectedTagIds([]);
+    }
+    if (!open) {
+      setShowNewProj(false);
+      setNewProjName("");
     }
   }, [open, editTask, defaultDate, defaultTime, defaultProjectId]);
 
@@ -167,8 +187,21 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, de
               <Folder className="h-3.5 w-3.5" />
               Project
             </Label>
-            <Select value={projectId || "none"} onValueChange={(v) => setProjectId(v === "none" ? "" : v)}>
-              <SelectTrigger><SelectValue placeholder="No project" /></SelectTrigger>
+            <Select
+              value={showNewProj ? "__new__" : (projectId || "none")}
+              onValueChange={(v) => {
+                if (v === "__new__") {
+                  setShowNewProj(true);
+                  setProjectId("");
+                } else {
+                  setShowNewProj(false);
+                  setProjectId(v === "none" ? "" : v);
+                }
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="No project" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">No project</SelectItem>
                 {projects.map((p) => (
@@ -176,8 +209,90 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, de
                     <span className="flex items-center gap-2"><span>{p.emoji}</span>{p.name}</span>
                   </SelectItem>
                 ))}
+                <SelectItem value="__new__">
+                  <span className="flex items-center gap-2 text-primary font-medium">
+                    <Plus className="h-3.5 w-3.5" />
+                    Create new project…
+                  </span>
+                </SelectItem>
               </SelectContent>
             </Select>
+
+            {/* Inline new-project form */}
+            {showNewProj && (
+              <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-primary">New Project</p>
+                  <button
+                    type="button"
+                    onClick={() => { setShowNewProj(false); setProjectId(""); }}
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
+                <Input
+                  placeholder="Project name"
+                  value={newProjName}
+                  onChange={(e) => setNewProjName(e.target.value)}
+                  className="h-8 text-sm"
+                  onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleCreateProject())}
+                  autoFocus
+                />
+
+                <div className="flex flex-wrap gap-1">
+                  {PROJECT_EMOJIS.slice(0, 10).map((em) => (
+                    <button
+                      key={em}
+                      type="button"
+                      onClick={() => setNewProjEmoji(em)}
+                      className={cn(
+                        "h-7 w-7 flex items-center justify-center rounded-lg text-sm border-2 transition-all",
+                        newProjEmoji === em
+                          ? "border-primary bg-primary/10"
+                          : "border-transparent hover:bg-muted"
+                      )}
+                    >
+                      {em}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  {PROJECT_COLORS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setNewProjColor(c)}
+                      className={cn(
+                        "h-6 w-6 rounded-full border-2 transition-all",
+                        newProjColor === c ? "border-foreground scale-110" : "border-transparent hover:scale-105"
+                      )}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div
+                    className="flex h-7 w-7 items-center justify-center rounded-lg text-sm shrink-0"
+                    style={{ backgroundColor: newProjColor + "33" }}
+                  >
+                    {newProjEmoji}
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="flex-1 h-8 bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white border-0"
+                    disabled={!newProjName.trim()}
+                    onClick={handleCreateProject}
+                  >
+                    Create &amp; Select
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Dates */}
