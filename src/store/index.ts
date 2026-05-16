@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { format } from "date-fns";
 import { generateId } from "@/lib/utils";
 import { toast } from "@/store/toast";
+import { fillDaySchedule } from "@/lib/schedule";
 import type { Task, Project, Tag, TaskStatus } from "@/lib/types";
 
 interface Store {
@@ -10,7 +11,6 @@ interface Store {
   tags: Tag[];
   isLoaded: boolean;
 
-  // Hydrate from API
   setData: (data: { tasks: Task[]; projects: Project[]; tags: Tag[] }) => void;
 
   // Task actions
@@ -41,8 +41,7 @@ interface Store {
 }
 
 function syncTask(method: string, id: string, body?: unknown) {
-  const url = `/api/tasks${id ? `/${id}` : ""}`;
-  return fetch(url, {
+  return fetch(`/api/tasks${id ? `/${id}` : ""}`, {
     method,
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
@@ -74,6 +73,21 @@ function syncTag(method: string, id: string, body?: unknown) {
   });
 }
 
+// Apply day rebalance to a task list and fire PATCH syncs. Returns updated task list.
+function applyDayRebalance(tasks: Task[], date: string): { tasks: Task[]; assignments: ScheduleAssignment[] } {
+  const dayTasks = tasks.filter((t) => t.scheduledDate === date && t.status !== "done");
+  const assignments = fillDaySchedule(dayTasks, date);
+  if (!assignments.length) return { tasks, assignments: [] };
+
+  const updated = tasks.map((t) => {
+    const a = assignments.find((x) => x.taskId === t.id);
+    return a ? { ...t, scheduledDate: a.scheduledDate, scheduledTime: a.scheduledTime, updatedAt: new Date().toISOString() } : t;
+  });
+  return { tasks: updated, assignments };
+}
+
+type ScheduleAssignment = { taskId: string; scheduledDate: string; scheduledTime: string };
+
 export const useStore = create<Store>()((set, get) => ({
   tasks: [],
   projects: [],
@@ -85,30 +99,96 @@ export const useStore = create<Store>()((set, get) => ({
   },
 
   addTask: (taskData) => {
+    const today = format(new Date(), "yyyy-MM-dd");
+    // Always assign a scheduled date — default to today
+    const scheduledDate = taskData.scheduledDate ?? today;
+
     const task: Task = {
       ...taskData,
+      scheduledDate,
+      scheduledTime: undefined, // will be set by rebalance
       id: generateId(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    set((s) => ({ tasks: [task, ...s.tasks] }));
-    syncTask("POST", "", task);
+
+    // Add task then rebalance the whole day in one state update
+    set((s) => {
+      const withNew = [task, ...s.tasks];
+      const { tasks: rebalanced, assignments } = applyDayRebalance(withNew, scheduledDate);
+      // Fire syncs after state settles
+      setTimeout(() => {
+        syncTask("POST", "", task);
+        for (const a of assignments) {
+          if (a.taskId !== task.id) {
+            syncTask("PATCH", a.taskId, { scheduledDate: a.scheduledDate, scheduledTime: a.scheduledTime });
+          } else {
+            // For the new task, the POST body will lack the time; send a follow-up PATCH
+            syncTask("PATCH", task.id, { scheduledDate: a.scheduledDate, scheduledTime: a.scheduledTime });
+          }
+        }
+      }, 0);
+      return { tasks: rebalanced };
+    });
+
+    toast.success("Task added");
     return task;
   },
 
   updateTask: (id, updates) => {
-    set((s) => ({
-      tasks: s.tasks.map((t) =>
+    set((s) => {
+      const updated = s.tasks.map((t) =>
         t.id === id ? { ...t, ...updates, updatedAt: new Date().toISOString() } : t
-      ),
-    }));
-    syncTask("PATCH", id, updates);
+      );
+
+      // Rebalance if something that affects scheduling changed
+      const shouldRebalance = "priority" in updates || "scheduledDate" in updates || "status" in updates;
+      if (!shouldRebalance) {
+        setTimeout(() => syncTask("PATCH", id, updates), 0);
+        return { tasks: updated };
+      }
+
+      const task = updated.find((t) => t.id === id);
+      const date = task?.scheduledDate;
+      if (!date) {
+        setTimeout(() => syncTask("PATCH", id, updates), 0);
+        return { tasks: updated };
+      }
+
+      const { tasks: rebalanced, assignments } = applyDayRebalance(updated, date);
+      setTimeout(() => {
+        syncTask("PATCH", id, updates);
+        for (const a of assignments) {
+          if (a.taskId !== id) {
+            syncTask("PATCH", a.taskId, { scheduledDate: a.scheduledDate, scheduledTime: a.scheduledTime });
+          }
+        }
+      }, 0);
+      return { tasks: rebalanced };
+    });
   },
 
   deleteTask: (id) => {
+    const task = get().tasks.find((t) => t.id === id);
+    const date = task?.scheduledDate;
+
+    set((s) => {
+      const without = s.tasks.filter((t) => t.id !== id);
+      if (!date) {
+        setTimeout(() => { syncTask("DELETE", id); }, 0);
+        return { tasks: without };
+      }
+      const { tasks: rebalanced, assignments } = applyDayRebalance(without, date);
+      setTimeout(() => {
+        syncTask("DELETE", id);
+        for (const a of assignments) {
+          syncTask("PATCH", a.taskId, { scheduledDate: a.scheduledDate, scheduledTime: a.scheduledTime });
+        }
+      }, 0);
+      return { tasks: rebalanced };
+    });
+
     toast.success("Task deleted");
-    set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) }));
-    syncTask("DELETE", id);
   },
 
   toggleTaskStatus: (id) => {
@@ -121,10 +201,8 @@ export const useStore = create<Store>()((set, get) => ({
       completedAt: next === "done" ? new Date().toISOString() : undefined,
       updatedAt: new Date().toISOString(),
     };
-    set((s) => ({
-      tasks: s.tasks.map((t) => (t.id === id ? { ...t, ...updates } : t)),
-    }));
-    syncTask("PATCH", id, updates);
+    // Reuse updateTask so it handles rebalancing (done tasks are excluded from the day)
+    get().updateTask(id, updates);
   },
 
   setTaskStatus: (id, status) => {
@@ -135,8 +213,7 @@ export const useStore = create<Store>()((set, get) => ({
       completedAt: status === "done" ? new Date().toISOString() : undefined,
       updatedAt: new Date().toISOString(),
     };
-    set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? { ...t, ...updates } : t)) }));
-    syncTask("PATCH", id, updates);
+    get().updateTask(id, updates);
   },
 
   addProject: (projectData) => {

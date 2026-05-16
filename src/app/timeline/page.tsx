@@ -522,41 +522,73 @@ export default function TimelinePage() {
                         </div>
                       ))}
 
-                      {/* Task blocks */}
-                      {timedTasks.map((task) => {
-                        const [th, tm] = (task.scheduledTime ?? "0:0").split(":").map(Number);
-                        const top = (th + tm / 60) * ROW_H;
-                        const proj = projects.find((p) => p.id === task.projectId);
-                        const bg = proj?.color ?? PRIORITY_HEX[task.priority];
-                        const isDone = task.status === "done";
+                      {/* Lunch break stripe */}
+                      <div
+                        className="absolute pointer-events-none z-[5]"
+                        style={{
+                          left: `${leftPct}%`,
+                          width: `${widthPct}%`,
+                          top: 12 * ROW_H,
+                          height: ROW_H,
+                          background: "repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(128,128,128,0.06) 4px, rgba(128,128,128,0.06) 8px)",
+                        }}
+                      >
+                        <span className="absolute inset-0 flex items-center justify-center text-[10px] text-muted-foreground/50 font-medium select-none">
+                          Lunch
+                        </span>
+                      </div>
 
-                        return (
-                          <div
-                            key={task.id}
-                            className={cn(
-                              "absolute rounded-md px-2 py-1 text-white cursor-pointer z-10 shadow-sm overflow-hidden select-none",
-                              "hover:brightness-110 active:scale-[0.98] transition-all",
-                              isDone && "opacity-50"
-                            )}
-                            style={{
-                              left: `calc(${leftPct}% + 3px)`,
-                              width: `calc(${widthPct}% - 6px)`,
-                              top: top + 1,
-                              height: ROW_H - 3,
-                              backgroundColor: bg,
-                            }}
-                            onClick={() => handleTaskClick(task)}
-                          >
-                            <p className="text-xs font-semibold leading-tight truncate">
-                              {isDone ? "✓ " : ""}{task.title}
-                            </p>
-                            <p className="text-[10px] opacity-75 mt-0.5">
-                              {task.scheduledTime}
-                              {proj && ` · ${proj.name}`}
-                            </p>
-                          </div>
-                        );
-                      })}
+                      {/* Task blocks — variable height based on slot until next task */}
+                      {(() => {
+                        const toMins = (t: Task) => {
+                          const [h, m] = (t.scheduledTime ?? "0:0").split(":").map(Number);
+                          return h * 60 + m;
+                        };
+                        const sorted = [...timedTasks].sort((a, b) => toMins(a) - toMins(b));
+                        const WORK_END_MINS = 18 * 60; // 6 PM
+
+                        return sorted.map((task, idx) => {
+                          const startMins = toMins(task);
+                          const nextMins = idx < sorted.length - 1 ? toMins(sorted[idx + 1]) : WORK_END_MINS;
+                          const durationMins = Math.max(30, nextMins - startMins);
+                          const top = (startMins / 60) * ROW_H;
+                          const height = Math.max(ROW_H / 2, (durationMins / 60) * ROW_H) - 3;
+
+                          const proj = projects.find((p) => p.id === task.projectId);
+                          const bg = proj?.color ?? PRIORITY_HEX[task.priority];
+                          const isDone = task.status === "done";
+                          const showTime = durationMins >= 45;
+
+                          return (
+                            <div
+                              key={task.id}
+                              className={cn(
+                                "absolute rounded-md px-2 py-1.5 text-white cursor-pointer z-10 shadow-sm overflow-hidden select-none",
+                                "hover:brightness-110 active:scale-[0.98] transition-all",
+                                isDone && "opacity-50"
+                              )}
+                              style={{
+                                left: `calc(${leftPct}% + 3px)`,
+                                width: `calc(${widthPct}% - 6px)`,
+                                top: top + 1,
+                                height,
+                                backgroundColor: bg,
+                              }}
+                              onClick={() => handleTaskClick(task)}
+                            >
+                              <p className="text-xs font-semibold leading-tight truncate">
+                                {isDone ? "✓ " : ""}{task.title}
+                              </p>
+                              {showTime && (
+                                <p className="text-[10px] opacity-75 mt-0.5">
+                                  {task.scheduledTime}
+                                  {proj && ` · ${proj.name}`}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        });
+                      })()}
                     </React.Fragment>
                   );
                 })}
