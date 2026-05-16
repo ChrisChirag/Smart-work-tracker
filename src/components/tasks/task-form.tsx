@@ -125,8 +125,8 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, de
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-lg p-0 overflow-hidden">
-        <div className="h-1 w-full bg-gradient-to-r from-indigo-500 to-violet-500" />
+      <DialogContent className="max-w-lg p-0">
+        <div className="sticky top-0 z-10 h-1 w-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-t-2xl sm:rounded-t-2xl" />
 
         <div className="px-6 pt-5 pb-0">
           <DialogHeader>
