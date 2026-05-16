@@ -16,6 +16,7 @@ import { autoSchedule } from "@/lib/schedule";
 import type { Task, Priority } from "@/lib/types";
 import {
   ChevronLeft, ChevronRight, CalendarDays, LayoutList, Zap, AlertCircle,
+  Copy, ArrowRight,
 } from "lucide-react";
 
 // ─── Layout constants ────────────────────────────────────────────────────────
@@ -190,6 +191,88 @@ function AutoScheduleDialog({
   );
 }
 
+// ─── Move / Duplicate dialog ─────────────────────────────────────────────────
+function MoveOrDuplicateDialog({
+  task,
+  fromDate,
+  toDate,
+  onClose,
+}: {
+  task: Task;
+  fromDate: string;
+  toDate: string;
+  onClose: () => void;
+}) {
+  const { updateTask, addTask } = useStore();
+
+  const handleMove = () => {
+    updateTask(task.id, { scheduledDate: toDate, scheduledTime: undefined });
+    onClose();
+  };
+
+  const handleDuplicate = () => {
+    addTask({
+      title: task.title,
+      description: task.description,
+      status: "todo",
+      priority: task.priority,
+      projectId: task.projectId,
+      tagIds: task.tagIds,
+      dueDate: task.dueDate,
+      scheduledDate: toDate,
+      scheduledTime: undefined,
+      completedAt: undefined,
+    });
+    onClose();
+  };
+
+  const fromLabel = format(new Date(fromDate + "T12:00"), "EEE, MMM d");
+  const toLabel   = format(new Date(toDate   + "T12:00"), "EEE, MMM d");
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-sm p-0 overflow-hidden">
+        <div className="h-1 w-full bg-gradient-to-r from-indigo-500 to-violet-500" />
+        <div className="px-5 pt-5 pb-1">
+          <DialogHeader>
+            <DialogTitle className="text-base">Move or duplicate task?</DialogTitle>
+          </DialogHeader>
+        </div>
+        <div className="px-5 pb-2 space-y-3">
+          <p className="text-sm text-muted-foreground leading-snug line-clamp-2">
+            <span className="font-medium text-foreground">{task.title}</span>
+          </p>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="rounded-md bg-muted px-2 py-1">{fromLabel}</span>
+            <ArrowRight className="h-3.5 w-3.5 shrink-0" />
+            <span className="rounded-md bg-primary/10 text-primary px-2 py-1 font-medium">{toLabel}</span>
+          </div>
+        </div>
+        <DialogFooter className="px-5 pb-5 pt-2 gap-2 flex-col sm:flex-row">
+          <Button variant="outline" size="sm" onClick={onClose} className="sm:mr-auto">Cancel</Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={handleDuplicate}
+          >
+            <Copy className="h-3.5 w-3.5" />
+            Duplicate to {toLabel}
+          </Button>
+          <Button
+            size="sm"
+            className="gap-1.5 bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white border-0"
+            onClick={handleMove}
+          >
+            <ArrowRight className="h-3.5 w-3.5" />
+            Move to {toLabel}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 export default function TimelinePage() {
   const { tasks, projects, isLoaded } = useStore();
@@ -205,6 +288,12 @@ export default function TimelinePage() {
 
   // Auto-schedule dialog
   const [scheduleOpen, setScheduleOpen] = useState(false);
+
+  // Drag-and-drop state
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverDate, setDragOverDate] = useState<string | null>(null);
+  const [pendingDrop, setPendingDrop] = useState<{ task: Task; fromDate: string; toDate: string } | null>(null);
+  const dragFromDate = useRef<string>("");
 
   // Current time indicator — updates every minute
   const [nowTop, setNowTop] = useState(() => {
@@ -502,11 +591,11 @@ export default function TimelinePage() {
                         />
                       )}
 
-                      {/* Hour click zones — double-click to create task */}
+                      {/* Hour click zones — double-click to add, drag-over to drop */}
                       {HOURS.map((h) => (
                         <div
                           key={h}
-                          className="absolute hover:bg-primary/[0.06] transition-colors cursor-crosshair group"
+                          className="absolute transition-colors cursor-crosshair group"
                           style={{
                             left: `${leftPct}%`,
                             width: `${widthPct}%`,
@@ -515,20 +604,46 @@ export default function TimelinePage() {
                           }}
                           onDoubleClick={() => handleSlotDblClick(day, h)}
                           title={`Double-click to add task at ${fmtHour(h)}`}
+                          onDragOver={(e) => {
+                            if (draggingId) {
+                              e.preventDefault();
+                              e.dataTransfer.dropEffect = "move";
+                              setDragOverDate(dayStr);
+                            }
+                          }}
+                          onDragLeave={(e) => {
+                            // Only clear when leaving the column entirely
+                            if (!e.currentTarget.parentElement?.contains(e.relatedTarget as Node)) {
+                              setDragOverDate(null);
+                            }
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            const taskId = e.dataTransfer.getData("taskId");
+                            const fromDate = dragFromDate.current;
+                            if (taskId && fromDate && fromDate !== dayStr) {
+                              const task = tasks.find((t) => t.id === taskId);
+                              if (task) setPendingDrop({ task, fromDate, toDate: dayStr });
+                            }
+                            setDraggingId(null);
+                            setDragOverDate(null);
+                          }}
                         >
-                          <span className="absolute inset-0 flex items-center justify-center text-[10px] text-primary/0 group-hover:text-primary/40 transition-colors pointer-events-none select-none">
-                            double-click to add
-                          </span>
+                          {!draggingId && (
+                            <span className="absolute inset-0 flex items-center justify-center text-[10px] text-primary/0 group-hover:text-primary/40 transition-colors pointer-events-none select-none">
+                              double-click to add
+                            </span>
+                          )}
                         </div>
                       ))}
 
-                      {/* Lunch break stripe */}
+                      {/* Lunch break stripe (1–2 PM) */}
                       <div
                         className="absolute pointer-events-none z-[5]"
                         style={{
                           left: `${leftPct}%`,
                           width: `${widthPct}%`,
-                          top: 12 * ROW_H,
+                          top: 13 * ROW_H,
                           height: ROW_H,
                           background: "repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(128,128,128,0.06) 4px, rgba(128,128,128,0.06) 8px)",
                         }}
@@ -538,14 +653,22 @@ export default function TimelinePage() {
                         </span>
                       </div>
 
-                      {/* Task blocks — variable height based on slot until next task */}
+                      {/* Drag-over highlight */}
+                      {dragOverDate === dayStr && draggingId && (
+                        <div
+                          className="absolute top-0 bottom-0 pointer-events-none z-[6] ring-2 ring-inset ring-primary/50 bg-primary/5 rounded-sm"
+                          style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+                        />
+                      )}
+
+                      {/* Task blocks — variable height, draggable */}
                       {(() => {
                         const toMins = (t: Task) => {
                           const [h, m] = (t.scheduledTime ?? "0:0").split(":").map(Number);
                           return h * 60 + m;
                         };
                         const sorted = [...timedTasks].sort((a, b) => toMins(a) - toMins(b));
-                        const WORK_END_MINS = 18 * 60; // 6 PM
+                        const WORK_END_MINS = 18 * 60;
 
                         return sorted.map((task, idx) => {
                           const startMins = toMins(task);
@@ -553,19 +676,28 @@ export default function TimelinePage() {
                           const durationMins = Math.max(30, nextMins - startMins);
                           const top = (startMins / 60) * ROW_H;
                           const height = Math.max(ROW_H / 2, (durationMins / 60) * ROW_H) - 3;
-
                           const proj = projects.find((p) => p.id === task.projectId);
                           const bg = proj?.color ?? PRIORITY_HEX[task.priority];
                           const isDone = task.status === "done";
-                          const showTime = durationMins >= 45;
+                          const isDragging = draggingId === task.id;
 
                           return (
                             <div
                               key={task.id}
+                              draggable
+                              onDragStart={(e) => {
+                                e.dataTransfer.effectAllowed = "move";
+                                e.dataTransfer.setData("taskId", task.id);
+                                dragFromDate.current = dayStr;
+                                setDraggingId(task.id);
+                              }}
+                              onDragEnd={() => { setDraggingId(null); setDragOverDate(null); }}
+                              onClick={() => !isDragging && handleTaskClick(task)}
                               className={cn(
-                                "absolute rounded-md px-2 py-1.5 text-white cursor-pointer z-10 shadow-sm overflow-hidden select-none",
-                                "hover:brightness-110 active:scale-[0.98] transition-all",
-                                isDone && "opacity-50"
+                                "absolute rounded-md px-2 py-1.5 text-white cursor-grab active:cursor-grabbing z-10 shadow-sm overflow-hidden select-none",
+                                "hover:brightness-110 transition-all",
+                                isDone && "opacity-50",
+                                isDragging && "opacity-40 scale-[0.98]"
                               )}
                               style={{
                                 left: `calc(${leftPct}% + 3px)`,
@@ -574,15 +706,13 @@ export default function TimelinePage() {
                                 height,
                                 backgroundColor: bg,
                               }}
-                              onClick={() => handleTaskClick(task)}
                             >
                               <p className="text-xs font-semibold leading-tight truncate">
                                 {isDone ? "✓ " : ""}{task.title}
                               </p>
-                              {showTime && (
+                              {durationMins >= 45 && (
                                 <p className="text-[10px] opacity-75 mt-0.5">
-                                  {task.scheduledTime}
-                                  {proj && ` · ${proj.name}`}
+                                  {task.scheduledTime}{proj && ` · ${proj.name}`}
                                 </p>
                               )}
                             </div>
@@ -630,6 +760,16 @@ export default function TimelinePage() {
         onClose={() => setScheduleOpen(false)}
         date={scheduleDate}
       />
+
+      {/* Move / Duplicate dialog */}
+      {pendingDrop && (
+        <MoveOrDuplicateDialog
+          task={pendingDrop.task}
+          fromDate={pendingDrop.fromDate}
+          toDate={pendingDrop.toDate}
+          onClose={() => setPendingDrop(null)}
+        />
+      )}
     </>
   );
 }

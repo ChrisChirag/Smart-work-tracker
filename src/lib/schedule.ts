@@ -3,8 +3,8 @@ import { differenceInCalendarDays, parseISO } from "date-fns";
 
 const WORK_START  = 9  * 60;  // 9:00 AM
 const WORK_END    = 18 * 60;  // 6:00 PM
-const LUNCH_START = 12 * 60;  // 12:00 PM
-const LUNCH_END   = 13 * 60;  // 1:00 PM
+const LUNCH_START = 13 * 60;  // 1:00 PM
+const LUNCH_END   = 14 * 60;  // 2:00 PM
 const AVAIL_MINS  = WORK_END - WORK_START - (LUNCH_END - LUNCH_START); // 480 min
 
 const PRIORITY_ORDER: Priority[] = ["urgent", "high", "medium", "low"];

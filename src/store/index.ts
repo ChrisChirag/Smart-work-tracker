@@ -137,34 +137,46 @@ export const useStore = create<Store>()((set, get) => ({
 
   updateTask: (id, updates) => {
     set((s) => {
+      const oldTask = s.tasks.find((t) => t.id === id);
+      const oldDate = oldTask?.scheduledDate;
+
       const updated = s.tasks.map((t) =>
         t.id === id ? { ...t, ...updates, updatedAt: new Date().toISOString() } : t
       );
 
-      // Rebalance if something that affects scheduling changed
       const shouldRebalance = "priority" in updates || "scheduledDate" in updates || "status" in updates;
       if (!shouldRebalance) {
         setTimeout(() => syncTask("PATCH", id, updates), 0);
         return { tasks: updated };
       }
 
-      const task = updated.find((t) => t.id === id);
-      const date = task?.scheduledDate;
-      if (!date) {
-        setTimeout(() => syncTask("PATCH", id, updates), 0);
-        return { tasks: updated };
+      const newTask = updated.find((t) => t.id === id);
+      const newDate = newTask?.scheduledDate;
+
+      let finalTasks = updated;
+      const allAssignments: Array<{ taskId: string; scheduledDate: string; scheduledTime: string }> = [];
+
+      if (newDate) {
+        const { tasks: r1, assignments: a1 } = applyDayRebalance(finalTasks, newDate);
+        finalTasks = r1;
+        allAssignments.push(...a1);
+      }
+      // When date changed, rebalance the vacated day too
+      if (oldDate && oldDate !== newDate) {
+        const { tasks: r2, assignments: a2 } = applyDayRebalance(finalTasks, oldDate);
+        finalTasks = r2;
+        allAssignments.push(...a2);
       }
 
-      const { tasks: rebalanced, assignments } = applyDayRebalance(updated, date);
       setTimeout(() => {
         syncTask("PATCH", id, updates);
-        for (const a of assignments) {
+        for (const a of allAssignments) {
           if (a.taskId !== id) {
             syncTask("PATCH", a.taskId, { scheduledDate: a.scheduledDate, scheduledTime: a.scheduledTime });
           }
         }
       }, 0);
-      return { tasks: rebalanced };
+      return { tasks: finalTasks };
     });
   },
 
