@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { format } from "date-fns";
 import { generateId } from "@/lib/utils";
+import { toast } from "@/store/toast";
 import type { Task, Project, Tag, TaskStatus } from "@/lib/types";
 
 interface Store {
@@ -17,6 +18,7 @@ interface Store {
   updateTask: (id: string, updates: Partial<Task>) => void;
   deleteTask: (id: string) => void;
   toggleTaskStatus: (id: string) => void;
+  setTaskStatus: (id: string, status: TaskStatus) => void;
 
   // Project actions
   addProject: (project: Omit<Project, "id" | "createdAt">) => Project;
@@ -37,27 +39,36 @@ interface Store {
 
 function syncTask(method: string, id: string, body?: unknown) {
   const url = `/api/tasks${id ? `/${id}` : ""}`;
-  fetch(url, {
+  return fetch(url, {
     method,
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
-  }).catch(console.error);
+  }).catch((err) => {
+    console.error(err);
+    toast.error("Sync failed — your data may not have saved");
+  });
 }
 
 function syncProject(method: string, id: string, body?: unknown) {
-  fetch(`/api/projects${id ? `/${id}` : ""}`, {
+  return fetch(`/api/projects${id ? `/${id}` : ""}`, {
     method,
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
-  }).catch(console.error);
+  }).catch((err) => {
+    console.error(err);
+    toast.error("Sync failed — your data may not have saved");
+  });
 }
 
 function syncTag(method: string, id: string, body?: unknown) {
-  fetch(`/api/tags${id ? `/${id}` : ""}`, {
+  return fetch(`/api/tags${id ? `/${id}` : ""}`, {
     method,
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
-  }).catch(console.error);
+  }).catch((err) => {
+    console.error(err);
+    toast.error("Sync failed — your data may not have saved");
+  });
 }
 
 export const useStore = create<Store>()((set, get) => ({
@@ -92,6 +103,7 @@ export const useStore = create<Store>()((set, get) => ({
   },
 
   deleteTask: (id) => {
+    toast.success("Task deleted");
     set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) }));
     syncTask("DELETE", id);
   },
@@ -112,12 +124,25 @@ export const useStore = create<Store>()((set, get) => ({
     syncTask("PATCH", id, updates);
   },
 
+  setTaskStatus: (id, status) => {
+    const task = get().tasks.find((t) => t.id === id);
+    if (!task || task.status === status) return;
+    const updates: Partial<Task> = {
+      status,
+      completedAt: status === "done" ? new Date().toISOString() : undefined,
+      updatedAt: new Date().toISOString(),
+    };
+    set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? { ...t, ...updates } : t)) }));
+    syncTask("PATCH", id, updates);
+  },
+
   addProject: (projectData) => {
     const project: Project = {
       ...projectData,
       id: generateId(),
       createdAt: new Date().toISOString(),
     };
+    toast.success("Project created");
     set((s) => ({ projects: [project, ...s.projects] }));
     syncProject("POST", "", project);
     return project;
@@ -131,6 +156,7 @@ export const useStore = create<Store>()((set, get) => ({
   },
 
   deleteProject: (id) => {
+    toast.success("Project deleted");
     set((s) => ({
       projects: s.projects.filter((p) => p.id !== id),
       tasks: s.tasks.map((t) => (t.projectId === id ? { ...t, projectId: undefined } : t)),
@@ -140,6 +166,7 @@ export const useStore = create<Store>()((set, get) => ({
 
   addTag: (tagData) => {
     const tag: Tag = { ...tagData, id: generateId() };
+    toast.success("Tag created");
     set((s) => ({ tags: [...s.tags, tag] }));
     syncTag("POST", "", tag);
     return tag;
@@ -152,6 +179,7 @@ export const useStore = create<Store>()((set, get) => ({
   },
 
   deleteTag: (id) => {
+    toast.success("Tag deleted");
     set((s) => ({
       tags: s.tags.filter((t) => t.id !== id),
       tasks: s.tasks.map((t) => ({ ...t, tagIds: t.tagIds.filter((tid) => tid !== id) })),

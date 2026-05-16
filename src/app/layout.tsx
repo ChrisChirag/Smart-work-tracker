@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { Providers } from "@/components/providers";
 import { AppShell } from "@/components/layout/app-shell";
 import { DataLoader } from "@/components/data-loader";
+import { Toaster } from "@/components/ui/toaster";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -30,6 +31,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           >
             <DataLoader />
             <AppShell>{children}</AppShell>
+            <Toaster />
           </ThemeProvider>
         </Providers>
       </body>
