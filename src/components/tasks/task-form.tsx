@@ -41,6 +41,7 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, de
   const [scheduledDate, setScheduledDate] = useState(editTask?.scheduledDate ?? defaultDate ?? "");
   const [scheduledTime, setScheduledTime] = useState(editTask?.scheduledTime ?? defaultTime ?? "");
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>(editTask?.tagIds ?? []);
+  const [pinnedTime, setPinnedTime] = useState(editTask?.pinnedTime ?? false);
 
   // Inline new-project creation
   const [showNewProj, setShowNewProj] = useState(false);
@@ -77,6 +78,7 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, de
       // Pass what the user explicitly chose; the store handles auto-scheduling
       scheduledDate: scheduledDate || undefined,
       scheduledTime: scheduledTime || undefined,
+      pinnedTime: !!scheduledTime && pinnedTime,
       completedAt: editTask?.completedAt,
     };
 
@@ -105,6 +107,7 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, de
       setScheduledDate(editTask.scheduledDate ?? "");
       setScheduledTime(editTask.scheduledTime ?? "");
       setSelectedTagIds(editTask.tagIds ?? []);
+      setPinnedTime(editTask.pinnedTime ?? false);
       setShowNewProj(false);
       setNewProjName("");
     } else {
@@ -117,6 +120,7 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, de
       setScheduledDate(defaultDate ?? "");
       setScheduledTime(defaultTime ?? "");
       setSelectedTagIds([]);
+      setPinnedTime(!!defaultTime);
       setShowNewProj(false);
       setNewProjName("");
     }
@@ -316,7 +320,7 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, de
             <Label>Time <span className="text-muted-foreground font-normal text-xs">(optional override)</span></Label>
             <TimePicker
               value={scheduledTime}
-              onChange={setScheduledTime}
+              onChange={(v) => { setScheduledTime(v); setPinnedTime(!!v); }}
               placeholder="Auto-assigned by priority"
             />
           </div>

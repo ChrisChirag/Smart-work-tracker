@@ -32,51 +32,66 @@ function skipLunch(mins: number): number {
   return mins >= LUNCH_START && mins < LUNCH_END ? LUNCH_END : mins;
 }
 
+const MIN_SLOT = 30;
+
 // ─── Primary: fill the whole 9-6 day proportionally ──────────────────────────
-// Sorts tasks by priority (urgent first), divides 480 available minutes
-// weighted by priority, then assigns consecutive start times 9 AM → 6 PM
-// with a 12-1 PM lunch gap automatically skipped.
+// Pinned tasks (pinnedTime === true) keep their exact scheduledTime.
+// Floating tasks are distributed proportionally in the remaining free slots.
 export function fillDaySchedule(tasks: Task[], date: string): ScheduleAssignment[] {
   const active = tasks.filter((t) => t.status !== "done");
   if (active.length === 0) return [];
 
-  // Sort: urgent → high → medium → low
-  const sorted = [...active].sort(
+  const pinned   = active.filter((t) => t.pinnedTime && t.scheduledTime);
+  const floating = active.filter((t) => !t.pinnedTime || !t.scheduledTime);
+
+  if (floating.length === 0) return []; // everything is pinned, nothing to move
+
+  // Build occupied-slot set from pinned tasks.
+  // Each pinned task "uses" as many MIN_SLOT blocks as its proportional share of the day.
+  const totalWeight  = active.reduce((s, t) => s + PRIORITY_WEIGHT[t.priority], 0);
+  const getDuration  = (t: Task) =>
+    Math.max(MIN_SLOT, Math.round((PRIORITY_WEIGHT[t.priority] / totalWeight) * AVAIL_MINS));
+
+  const occupiedMins = new Set<number>();
+  for (const t of pinned) {
+    const [h, m] = t.scheduledTime!.split(":").map(Number);
+    const start = h * 60 + m;
+    const dur   = getDuration(t);
+    for (let s = start; s < start + dur; s += MIN_SLOT) occupiedMins.add(s);
+  }
+
+  // Build ordered list of free 30-min slots
+  const freeSlots: number[] = [];
+  for (let m = WORK_START; m + MIN_SLOT <= WORK_END; m += MIN_SLOT) {
+    if (m >= LUNCH_START && m < LUNCH_END) continue;
+    if (occupiedMins.has(m)) continue;
+    freeSlots.push(m);
+  }
+
+  // Sort floating tasks: urgent → high → medium → low
+  const sorted = [...floating].sort(
     (a, b) => PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority)
   );
 
-  const totalWeight = sorted.reduce((s, t) => s + PRIORITY_WEIGHT[t.priority], 0);
-
-  // Each task's raw allocation, minimum 30 min
-  const MIN_SLOT = 30;
-  const durations = sorted.map((t) =>
-    Math.max(MIN_SLOT, Math.round((PRIORITY_WEIGHT[t.priority] / totalWeight) * AVAIL_MINS))
-  );
-
-  // If minimum enforcement pushes total over AVAIL_MINS, trim the lowest-priority tasks
-  let total = durations.reduce((a, b) => a + b, 0);
-  for (let i = durations.length - 1; i >= 0 && total > AVAIL_MINS; i--) {
-    const excess = total - AVAIL_MINS;
-    const trim   = Math.min(excess, durations[i] - MIN_SLOT);
-    if (trim > 0) { durations[i] -= trim; total -= trim; }
-  }
+  const floatWeight = floating.reduce((s, t) => s + PRIORITY_WEIGHT[t.priority], 0);
+  const floatMins   = freeSlots.length * MIN_SLOT;
 
   const assignments: ScheduleAssignment[] = [];
-  let cursor = WORK_START;
+  let slotIdx = 0;
 
-  for (let i = 0; i < sorted.length; i++) {
-    cursor = skipLunch(cursor);
-    if (cursor >= WORK_END) break;
+  for (const task of sorted) {
+    if (slotIdx >= freeSlots.length) break;
+
+    const dur       = Math.max(MIN_SLOT, Math.round((PRIORITY_WEIGHT[task.priority] / floatWeight) * floatMins));
+    const slotsUsed = Math.max(1, Math.round(dur / MIN_SLOT));
 
     assignments.push({
-      taskId: sorted[i].id,
+      taskId: task.id,
       scheduledDate: date,
-      scheduledTime: minsToTime(cursor),
+      scheduledTime: minsToTime(freeSlots[slotIdx]),
     });
 
-    cursor += durations[i];
-    // If we've advanced into lunch, jump to 1 PM so the next task starts there
-    if (cursor > LUNCH_START && cursor <= LUNCH_END) cursor = LUNCH_END;
+    slotIdx += slotsUsed;
   }
 
   return assignments;

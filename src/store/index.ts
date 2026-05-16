@@ -106,7 +106,8 @@ export const useStore = create<Store>()((set, get) => ({
     const task: Task = {
       ...taskData,
       scheduledDate,
-      scheduledTime: undefined, // will be set by rebalance
+      // Preserve explicitly chosen time (pinnedTime); clear it otherwise so rebalance assigns it
+      scheduledTime: taskData.pinnedTime ? taskData.scheduledTime : undefined,
       id: generateId(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -144,7 +145,9 @@ export const useStore = create<Store>()((set, get) => ({
         t.id === id ? { ...t, ...updates, updatedAt: new Date().toISOString() } : t
       );
 
-      const shouldRebalance = "priority" in updates || "scheduledDate" in updates || "status" in updates;
+      const shouldRebalance =
+        "priority" in updates || "scheduledDate" in updates ||
+        "status" in updates || "pinnedTime" in updates || "scheduledTime" in updates;
       if (!shouldRebalance) {
         setTimeout(() => syncTask("PATCH", id, updates), 0);
         return { tasks: updated };

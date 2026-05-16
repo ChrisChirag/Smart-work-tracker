@@ -26,6 +26,7 @@ export interface Task {
   dueDate?: string;
   scheduledDate?: string;
   scheduledTime?: string;
+  pinnedTime?: boolean;
   completedAt?: string;
   createdAt: string;
   updatedAt: string;

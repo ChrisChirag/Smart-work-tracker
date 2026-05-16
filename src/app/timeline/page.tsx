@@ -16,7 +16,7 @@ import { autoSchedule } from "@/lib/schedule";
 import type { Task, Priority } from "@/lib/types";
 import {
   ChevronLeft, ChevronRight, CalendarDays, LayoutList, Zap, AlertCircle,
-  Copy, ArrowRight,
+  Copy, ArrowRight, Pin,
 } from "lucide-react";
 
 // ─── Layout constants ────────────────────────────────────────────────────────
@@ -707,8 +707,12 @@ export default function TimelinePage() {
                                 backgroundColor: bg,
                               }}
                             >
-                              <p className="text-xs font-semibold leading-tight truncate">
-                                {isDone ? "✓ " : ""}{task.title}
+                              <p className="text-xs font-semibold leading-tight truncate flex items-center gap-1">
+                                {isDone ? "✓ " : ""}
+                                {task.title}
+                                {task.pinnedTime && (
+                                  <Pin className="h-2.5 w-2.5 shrink-0 opacity-80" aria-label="Pinned time" />
+                                )}
                               </p>
                               {durationMins >= 45 && (
                                 <p className="text-[10px] opacity-75 mt-0.5">
