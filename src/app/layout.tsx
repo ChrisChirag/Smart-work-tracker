@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { ThemeProvider } from "next-themes";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { Providers } from "@/components/providers";
 import { AppShell } from "@/components/layout/app-shell";
 import { DataLoader } from "@/components/data-loader";
@@ -13,11 +15,13 @@ export const metadata: Metadata = {
   description: "A modern, smart work tracker with projects, timeline, and priority management",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const session = await getServerSession(authOptions);
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        <Providers>
+        <Providers session={session}>
           <ThemeProvider
             attribute="class"
             defaultTheme="system"
