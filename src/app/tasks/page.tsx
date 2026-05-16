@@ -14,10 +14,95 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PRIORITY_CONFIG } from "@/lib/utils";
 import type { Priority, TaskStatus } from "@/lib/types";
-import { Search, Plus, Filter, SortAsc } from "lucide-react";
+import { Search, Plus, Filter, SortAsc, X } from "lucide-react";
 
-type SortKey = "createdAt" | "dueDate" | "priority" | "title";
+type SortKey = "createdAt" | "dueDate" | "priority" | "title" | "completedLast";
 const PRIORITY_ORDER: Record<Priority, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
+
+interface ActiveFiltersProps {
+  search: string;
+  filterPriority: string;
+  filterProject: string;
+  filterTag: string;
+  projects: { id: string; name: string; emoji: string }[];
+  tags: { id: string; name: string }[];
+  onClearSearch: () => void;
+  onClearPriority: () => void;
+  onClearProject: () => void;
+  onClearTag: () => void;
+  onClearAll: () => void;
+}
+
+function ActiveFilters({
+  search, filterPriority, filterProject, filterTag,
+  projects, tags,
+  onClearSearch, onClearPriority, onClearProject, onClearTag, onClearAll,
+}: ActiveFiltersProps) {
+  const hasAny =
+    search ||
+    filterPriority !== "all" ||
+    filterProject !== "all" ||
+    filterTag !== "all";
+
+  if (!hasAny) return null;
+
+  const projectLabel = filterProject === "none"
+    ? "No project"
+    : projects.find((p) => p.id === filterProject)
+      ? `${projects.find((p) => p.id === filterProject)!.emoji} ${projects.find((p) => p.id === filterProject)!.name}`
+      : null;
+
+  const tagLabel = tags.find((t) => t.id === filterTag)?.name;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs text-muted-foreground font-medium">Filters:</span>
+
+      {search && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-2.5 py-1 text-xs font-medium">
+          Search: &quot;{search}&quot;
+          <button onClick={onClearSearch} aria-label="Clear search filter" className="hover:text-primary/70 ml-0.5">
+            <X className="h-3 w-3" />
+          </button>
+        </span>
+      )}
+
+      {filterPriority !== "all" && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-2.5 py-1 text-xs font-medium">
+          {PRIORITY_CONFIG[filterPriority as Priority].label}
+          <button onClick={onClearPriority} aria-label="Clear priority filter" className="hover:text-primary/70 ml-0.5">
+            <X className="h-3 w-3" />
+          </button>
+        </span>
+      )}
+
+      {filterProject !== "all" && projectLabel && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-2.5 py-1 text-xs font-medium">
+          {projectLabel}
+          <button onClick={onClearProject} aria-label="Clear project filter" className="hover:text-primary/70 ml-0.5">
+            <X className="h-3 w-3" />
+          </button>
+        </span>
+      )}
+
+      {filterTag !== "all" && tagLabel && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-2.5 py-1 text-xs font-medium">
+          {tagLabel}
+          <button onClick={onClearTag} aria-label="Clear tag filter" className="hover:text-primary/70 ml-0.5">
+            <X className="h-3 w-3" />
+          </button>
+        </span>
+      )}
+
+      <button
+        onClick={onClearAll}
+        className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+      >
+        Clear all
+      </button>
+    </div>
+  );
+}
 
 export default function TasksPage() {
   const { tasks, projects, tags, isLoaded } = useStore();
@@ -28,6 +113,20 @@ export default function TasksPage() {
   const [sortBy, setSortBy] = useState<SortKey>("createdAt");
   const [addOpen, setAddOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<TaskStatus | "all">("all");
+
+  const hasFilters = !!(
+    search ||
+    filterPriority !== "all" ||
+    filterProject !== "all" ||
+    filterTag !== "all"
+  );
+
+  const clearAllFilters = () => {
+    setSearch("");
+    setFilterPriority("all");
+    setFilterProject("all");
+    setFilterTag("all");
+  };
 
   const filtered = useMemo(() => {
     return tasks
@@ -41,6 +140,12 @@ export default function TasksPage() {
         return true;
       })
       .sort((a, b) => {
+        if (sortBy === "completedLast") {
+          const aDone = a.status === "done" ? 1 : 0;
+          const bDone = b.status === "done" ? 1 : 0;
+          if (aDone !== bDone) return aDone - bDone;
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        }
         if (sortBy === "priority") return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
         if (sortBy === "dueDate") {
           if (!a.dueDate) return 1;
@@ -154,9 +259,25 @@ export default function TasksPage() {
               <SelectItem value="priority">Priority</SelectItem>
               <SelectItem value="dueDate">Due date</SelectItem>
               <SelectItem value="title">A–Z</SelectItem>
+              <SelectItem value="completedLast">Completed last</SelectItem>
             </SelectContent>
           </Select>
         </div>
+
+        {/* Active filter chips */}
+        <ActiveFilters
+          search={search}
+          filterPriority={filterPriority}
+          filterProject={filterProject}
+          filterTag={filterTag}
+          projects={projects}
+          tags={tags}
+          onClearSearch={() => setSearch("")}
+          onClearPriority={() => setFilterPriority("all")}
+          onClearProject={() => setFilterProject("all")}
+          onClearTag={() => setFilterTag("all")}
+          onClearAll={clearAllFilters}
+        />
 
         {/* Status tabs */}
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
@@ -170,16 +291,32 @@ export default function TasksPage() {
           <TabsContent value={activeTab} className="mt-3">
             {filtered.length === 0 ? (
               <div className="rounded-xl border border-dashed py-16 text-center">
-                <p className="text-sm text-muted-foreground">No tasks found</p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-4"
-                  onClick={() => setAddOpen(true)}
-                >
-                  <Plus className="h-4 w-4" />
-                  Add a task
-                </Button>
+                {hasFilters ? (
+                  <>
+                    <p className="text-sm text-muted-foreground">No tasks match your filters</p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mt-4"
+                      onClick={clearAllFilters}
+                    >
+                      Clear filters
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground">No tasks found</p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mt-4"
+                      onClick={() => setAddOpen(true)}
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add a task
+                    </Button>
+                  </>
+                )}
               </div>
             ) : (
               <div className="space-y-2">

@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
-import { format } from "date-fns";
+import React, { useState, useMemo } from "react";
+import { format, addDays, parseISO } from "date-fns";
 import { useStore } from "@/store";
+import { useSession } from "next-auth/react";
 import { Header } from "@/components/layout/header";
 import { TaskCard } from "@/components/tasks/task-card";
 import { TaskForm } from "@/components/tasks/task-form";
@@ -13,7 +14,7 @@ import { DashboardSkeleton } from "@/components/dashboard/loading-skeleton";
 import { PRIORITY_CONFIG } from "@/lib/utils";
 import {
   CheckCircle2, Clock, ListTodo, AlertTriangle,
-  TrendingUp, Plus, ArrowRight, Zap, Sparkles,
+  TrendingUp, Plus, ArrowRight, Zap, Sparkles, CalendarClock,
 } from "lucide-react";
 import Link from "next/link";
 import type { Priority } from "@/lib/types";
@@ -46,31 +47,90 @@ function StatCard({
   );
 }
 
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 17) return "Good afternoon";
+  return "Good evening";
+}
+
 export default function Dashboard() {
   const { tasks, projects, getOverdueTasks, isLoaded } = useStore();
+  const { data: session } = useSession();
   const [addOpen, setAddOpen] = useState(false);
+
   const today = format(new Date(), "yyyy-MM-dd");
   const greeting = getGreeting();
 
-  const todayTasks = tasks.filter(
-    (t) => t.scheduledDate === today || (t.dueDate === today && !t.scheduledDate)
-  );
-  const overdueTasks = getOverdueTasks();
-  const doneTasks = tasks.filter((t) => t.status === "done");
-  const inProgressTasks = tasks.filter((t) => t.status === "in_progress");
+  const firstName = useMemo(() => {
+    const name = session?.user?.name;
+    if (!name) return "";
+    return name.split(" ")[0];
+  }, [session?.user?.name]);
 
-  const urgentTasks = tasks
-    .filter((t) => t.priority === "urgent" && t.status !== "done")
-    .slice(0, 3);
+  const {
+    todayTasks,
+    overdueTasks,
+    doneTasks,
+    inProgressTasks,
+    urgentTasks,
+    upcomingTasks,
+    completionRate,
+    todayDone,
+    todayProgressPct,
+  } = useMemo(() => {
+    const todayTasks = tasks
+      .filter((t) => t.scheduledDate === today || (t.dueDate === today && !t.scheduledDate))
+      .sort((a, b) => {
+        // Tasks with scheduledTime first, sorted by time; then tasks without time
+        if (a.scheduledTime && b.scheduledTime) return a.scheduledTime.localeCompare(b.scheduledTime);
+        if (a.scheduledTime) return -1;
+        if (b.scheduledTime) return 1;
+        return 0;
+      });
 
-  const completionRate = tasks.length
-    ? Math.round((doneTasks.length / tasks.length) * 100)
-    : 0;
+    const overdueTasks = getOverdueTasks();
+    const doneTasks = tasks.filter((t) => t.status === "done");
+    const inProgressTasks = tasks.filter((t) => t.status === "in_progress");
 
-  const todayDone = todayTasks.filter((t) => t.status === "done").length;
-  const todayProgressPct = todayTasks.length
-    ? Math.round((todayDone / todayTasks.length) * 100)
-    : 0;
+    const urgentTasks = tasks
+      .filter((t) => t.priority === "urgent" && t.status !== "done")
+      .slice(0, 3);
+
+    // Upcoming: dueDate in the next 1-6 days (not today, not overdue), not done
+    const tomorrow = format(addDays(new Date(), 1), "yyyy-MM-dd");
+    const sixDaysOut = format(addDays(new Date(), 6), "yyyy-MM-dd");
+    const upcomingTasks = tasks
+      .filter((t) =>
+        t.dueDate &&
+        t.dueDate >= tomorrow &&
+        t.dueDate <= sixDaysOut &&
+        t.status !== "done"
+      )
+      .sort((a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? ""))
+      .slice(0, 5);
+
+    const completionRate = tasks.length
+      ? Math.round((doneTasks.length / tasks.length) * 100)
+      : 0;
+
+    const todayDone = todayTasks.filter((t) => t.status === "done").length;
+    const todayProgressPct = todayTasks.length
+      ? Math.round((todayDone / todayTasks.length) * 100)
+      : 0;
+
+    return {
+      todayTasks,
+      overdueTasks,
+      doneTasks,
+      inProgressTasks,
+      urgentTasks,
+      upcomingTasks,
+      completionRate,
+      todayDone,
+      todayProgressPct,
+    };
+  }, [tasks, today, getOverdueTasks]);
 
   if (!isLoaded) {
     return (
@@ -101,7 +161,7 @@ export default function Dashboard() {
                   {format(new Date(), "EEEE, MMMM d, yyyy")}
                 </p>
                 <h2 className="text-xl md:text-2xl font-bold leading-tight">
-                  {greeting}! Ready to crush it?
+                  {greeting}{firstName ? `, ${firstName}` : ""}! Ready to crush it?
                 </h2>
                 {todayTasks.length > 0 ? (
                   <div className="mt-4 space-y-1.5">
@@ -170,7 +230,7 @@ export default function Dashboard() {
 
         {/* Main content grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-          {/* Today's tasks - 2 col */}
+          {/* Today's tasks + upcoming + overdue — 2 col */}
           <div className="lg:col-span-2 space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="font-semibold">Today&apos;s Tasks</h2>
@@ -219,6 +279,27 @@ export default function Dashboard() {
                 {todayTasks.map((task) => (
                   <TaskCard key={task.id} task={task} />
                 ))}
+              </div>
+            )}
+
+            {/* Due Soon */}
+            {upcomingTasks.length > 0 && (
+              <div className="mt-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <CalendarClock className="h-4 w-4 text-blue-500" />
+                  <h2 className="font-semibold text-blue-600 dark:text-blue-400">
+                    Due Soon ({upcomingTasks.length})
+                  </h2>
+                </div>
+                {upcomingTasks.map((task) => (
+                  <TaskCard key={task.id} task={task} compact />
+                ))}
+                <Link href="/tasks">
+                  <Button variant="outline" size="sm" className="w-full gap-2 mt-1">
+                    View all tasks
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Button>
+                </Link>
               </div>
             )}
 
@@ -361,11 +442,4 @@ export default function Dashboard() {
       />
     </>
   );
-}
-
-function getGreeting() {
-  const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 17) return "Good afternoon";
-  return "Good evening";
 }

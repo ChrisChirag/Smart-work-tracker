@@ -145,7 +145,7 @@ export default function TimelinePage() {
       <Header title="Timeline" subtitle={subtitleText} />
 
       {/* Full remaining viewport height */}
-      <div className="flex flex-col overflow-hidden" style={{ height: "calc(100vh - 57px)" }}>
+      <div className="flex flex-col flex-1 overflow-hidden min-h-0">
 
         {/* ── Controls bar ── */}
         <div className="shrink-0 flex items-center justify-between gap-2 px-4 py-2 border-b bg-background">

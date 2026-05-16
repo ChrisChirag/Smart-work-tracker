@@ -11,10 +11,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { PROJECT_COLORS, PROJECT_EMOJIS, cn, generateId } from "@/lib/utils";
+import { AlertDialog } from "@/components/ui/alert-dialog";
+import { PROJECT_COLORS, PROJECT_EMOJIS, cn } from "@/lib/utils";
 import { Plus, Folder, CheckCircle2, Clock, Circle, Trash2, Pencil, ArrowRight } from "lucide-react";
 import Link from "next/link";
-import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 
 function ProjectForm({
@@ -139,6 +139,9 @@ export default function ProjectsPage() {
   const { projects, tasks, deleteProject, isLoaded } = useStore();
   const [addOpen, setAddOpen] = useState(false);
   const [editId, setEditId] = useState<string | undefined>();
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  const projectToDelete = projects.find((p) => p.id === deleteId);
 
   if (!isLoaded) {
     return (
@@ -228,6 +231,7 @@ export default function ProjectsPage() {
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7"
+                          aria-label="Edit project"
                           onClick={() => setEditId(project.id)}
                         >
                           <Pencil className="h-3.5 w-3.5" />
@@ -236,11 +240,8 @@ export default function ProjectsPage() {
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={() => {
-                            if (confirm(`Delete "${project.name}"? Tasks will be unlinked.`)) {
-                              deleteProject(project.id);
-                            }
-                          }}
+                          aria-label="Delete project"
+                          onClick={() => setDeleteId(project.id)}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -293,6 +294,19 @@ export default function ProjectsPage() {
         open={!!editId}
         onClose={() => setEditId(undefined)}
         editId={editId}
+      />
+
+      <AlertDialog
+        open={!!deleteId}
+        onOpenChange={(open) => { if (!open) setDeleteId(null); }}
+        title={`Delete "${projectToDelete?.name}"?`}
+        description="All tasks in this project will be unlinked. This action cannot be undone."
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={() => {
+          if (deleteId) deleteProject(deleteId);
+          setDeleteId(null);
+        }}
       />
     </>
   );

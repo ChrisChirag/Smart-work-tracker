@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { useTheme } from "next-themes";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import { useStore } from "@/store";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -10,16 +10,56 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog } from "@/components/ui/alert-dialog";
 import { TAG_COLORS, cn } from "@/lib/utils";
-import { Sun, Moon, Monitor, Plus, Trash2, Tag, Zap, Shield, RefreshCw } from "lucide-react";
+import { format } from "date-fns";
+import {
+  Sun, Moon, Monitor, Plus, Trash2, Tag, Zap, Shield, RefreshCw,
+  Download, LogOut,
+} from "lucide-react";
+import type { Task, Project } from "@/lib/types";
+
+function exportCSV(tasks: Task[], projects: Project[]) {
+  const headers = ["Title", "Description", "Status", "Priority", "Project", "Due Date", "Scheduled Date", "Created"];
+  const rows = tasks.map((t) => [
+    `"${t.title.replace(/"/g, '""')}"`,
+    `"${(t.description ?? "").replace(/"/g, '""')}"`,
+    t.status,
+    t.priority,
+    projects.find((p) => p.id === t.projectId)?.name ?? "",
+    t.dueDate ?? "",
+    t.scheduledDate ?? "",
+    new Date(t.createdAt).toLocaleDateString(),
+  ]);
+  const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `tasks-${format(new Date(), "yyyy-MM-dd")}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportJSON(tasks: Task[], projects: Project[], tags: { id: string; name: string; color: string }[]) {
+  const data = JSON.stringify({ tasks, projects, tags }, null, 2);
+  const blob = new Blob([data], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `work-tracker-${format(new Date(), "yyyy-MM-dd")}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const { data: session } = useSession();
-  const { tags, addTag, deleteTag } = useStore();
+  const { tasks, projects, tags, addTag, deleteTag } = useStore();
   const [tagOpen, setTagOpen] = useState(false);
   const [tagName, setTagName] = useState("");
   const [tagColor, setTagColor] = useState(TAG_COLORS[0]);
+  const [deleteTagId, setDeleteTagId] = useState<string | null>(null);
 
   const handleAddTag = (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,6 +71,7 @@ export default function SettingsPage() {
   };
 
   const user = session?.user;
+  const tagToDelete = tags.find((t) => t.id === deleteTagId);
 
   return (
     <>
@@ -137,9 +178,8 @@ export default function SettingsPage() {
                   >
                     {tag.name}
                     <button
-                      onClick={() => {
-                        if (confirm(`Delete tag "${tag.name}"?`)) deleteTag(tag.id);
-                      }}
+                      onClick={() => setDeleteTagId(tag.id)}
+                      aria-label={`Delete tag ${tag.name}`}
                       className="flex h-4 w-4 items-center justify-center rounded-full bg-white/20 hover:bg-white/40 transition-colors"
                     >
                       <Trash2 className="h-2.5 w-2.5" />
@@ -148,6 +188,39 @@ export default function SettingsPage() {
                 ))}
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Export Data */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Export Data</CardTitle>
+            <CardDescription>Download a copy of your tasks and projects</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="flex flex-wrap gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => exportCSV(tasks, projects)}
+              >
+                <Download className="h-4 w-4" />
+                Export as CSV
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => exportJSON(tasks, projects, tags)}
+              >
+                <Download className="h-4 w-4" />
+                Export as JSON
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-3">
+              CSV exports task data. JSON exports all data including projects and tags.
+            </p>
           </CardContent>
         </Card>
 
@@ -175,6 +248,33 @@ export default function SettingsPage() {
                 <Shield className="h-3.5 w-3.5 shrink-0" />
                 Your tasks and projects are private to your account.
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Danger Zone */}
+        <Card className="border-destructive/40">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base text-destructive">Danger Zone</CardTitle>
+            <CardDescription>Irreversible and destructive actions</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="flex items-center justify-between rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+              <div>
+                <p className="text-sm font-medium">Sign out</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Sign out of your account on this device
+                </p>
+              </div>
+              <Button
+                variant="destructive"
+                size="sm"
+                className="gap-2 shrink-0"
+                onClick={() => signOut({ callbackUrl: "/auth/signin" })}
+              >
+                <LogOut className="h-4 w-4" />
+                Sign out
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -234,6 +334,20 @@ export default function SettingsPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Delete tag confirmation */}
+      <AlertDialog
+        open={!!deleteTagId}
+        onOpenChange={(open) => { if (!open) setDeleteTagId(null); }}
+        title={`Delete tag "${tagToDelete?.name}"?`}
+        description="This will remove the tag from all tasks. This action cannot be undone."
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={() => {
+          if (deleteTagId) deleteTag(deleteTagId);
+          setDeleteTagId(null);
+        }}
+      />
     </>
   );
 }
