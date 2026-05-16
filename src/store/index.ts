@@ -1,14 +1,16 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 import { format } from "date-fns";
 import { generateId } from "@/lib/utils";
-// format is used in getOverdueTasks
 import type { Task, Project, Tag, TaskStatus } from "@/lib/types";
 
 interface Store {
   tasks: Task[];
   projects: Project[];
   tags: Tag[];
+  isLoaded: boolean;
+
+  // Hydrate from API
+  setData: (data: { tasks: Task[]; projects: Project[]; tags: Tag[] }) => void;
 
   // Task actions
   addTask: (task: Omit<Task, "id" | "createdAt" | "updatedAt">) => Task;
@@ -33,131 +35,135 @@ interface Store {
   getOverdueTasks: () => Task[];
 }
 
-export const useStore = create<Store>()(
-  persist(
-    (set, get) => ({
-      tasks: [],
-      projects: [],
-      tags: [],
+function syncTask(method: string, id: string, body?: unknown) {
+  const url = `/api/tasks${id ? `/${id}` : ""}`;
+  fetch(url, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  }).catch(console.error);
+}
 
-      addTask: (taskData) => {
-        const task: Task = {
-          ...taskData,
-          id: generateId(),
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        set((s) => ({ tasks: [task, ...s.tasks] }));
-        return task;
-      },
+function syncProject(method: string, id: string, body?: unknown) {
+  fetch(`/api/projects${id ? `/${id}` : ""}`, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  }).catch(console.error);
+}
 
-      updateTask: (id, updates) => {
-        set((s) => ({
-          tasks: s.tasks.map((t) =>
-            t.id === id
-              ? { ...t, ...updates, updatedAt: new Date().toISOString() }
-              : t
-          ),
-        }));
-      },
+function syncTag(method: string, id: string, body?: unknown) {
+  fetch(`/api/tags${id ? `/${id}` : ""}`, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  }).catch(console.error);
+}
 
-      deleteTask: (id) => {
-        set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) }));
-      },
+export const useStore = create<Store>()((set, get) => ({
+  tasks: [],
+  projects: [],
+  tags: [],
+  isLoaded: false,
 
-      toggleTaskStatus: (id) => {
-        const task = get().tasks.find((t) => t.id === id);
-        if (!task) return;
-        const next: TaskStatus =
-          task.status === "done"
-            ? "todo"
-            : task.status === "todo"
-            ? "in_progress"
-            : "done";
-        set((s) => ({
-          tasks: s.tasks.map((t) =>
-            t.id === id
-              ? {
-                  ...t,
-                  status: next,
-                  completedAt: next === "done" ? new Date().toISOString() : undefined,
-                  updatedAt: new Date().toISOString(),
-                }
-              : t
-          ),
-        }));
-      },
+  setData: ({ tasks, projects, tags }) => {
+    set({ tasks, projects, tags, isLoaded: true });
+  },
 
-      addProject: (projectData) => {
-        const project: Project = {
-          ...projectData,
-          id: generateId(),
-          createdAt: new Date().toISOString(),
-        };
-        set((s) => ({ projects: [project, ...s.projects] }));
-        return project;
-      },
+  addTask: (taskData) => {
+    const task: Task = {
+      ...taskData,
+      id: generateId(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    set((s) => ({ tasks: [task, ...s.tasks] }));
+    syncTask("POST", "", task);
+    return task;
+  },
 
-      updateProject: (id, updates) => {
-        set((s) => ({
-          projects: s.projects.map((p) =>
-            p.id === id ? { ...p, ...updates } : p
-          ),
-        }));
-      },
+  updateTask: (id, updates) => {
+    set((s) => ({
+      tasks: s.tasks.map((t) =>
+        t.id === id ? { ...t, ...updates, updatedAt: new Date().toISOString() } : t
+      ),
+    }));
+    syncTask("PATCH", id, updates);
+  },
 
-      deleteProject: (id) => {
-        set((s) => ({
-          projects: s.projects.filter((p) => p.id !== id),
-          tasks: s.tasks.map((t) =>
-            t.projectId === id ? { ...t, projectId: undefined } : t
-          ),
-        }));
-      },
+  deleteTask: (id) => {
+    set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) }));
+    syncTask("DELETE", id);
+  },
 
-      addTag: (tagData) => {
-        const tag: Tag = { ...tagData, id: generateId() };
-        set((s) => ({ tags: [...s.tags, tag] }));
-        return tag;
-      },
+  toggleTaskStatus: (id) => {
+    const task = get().tasks.find((t) => t.id === id);
+    if (!task) return;
+    const next: TaskStatus =
+      task.status === "done" ? "todo" : task.status === "todo" ? "in_progress" : "done";
+    const updates: Partial<Task> = {
+      status: next,
+      completedAt: next === "done" ? new Date().toISOString() : undefined,
+      updatedAt: new Date().toISOString(),
+    };
+    set((s) => ({
+      tasks: s.tasks.map((t) => (t.id === id ? { ...t, ...updates } : t)),
+    }));
+    syncTask("PATCH", id, updates);
+  },
 
-      updateTag: (id, updates) => {
-        set((s) => ({
-          tags: s.tags.map((t) => (t.id === id ? { ...t, ...updates } : t)),
-        }));
-      },
+  addProject: (projectData) => {
+    const project: Project = {
+      ...projectData,
+      id: generateId(),
+      createdAt: new Date().toISOString(),
+    };
+    set((s) => ({ projects: [project, ...s.projects] }));
+    syncProject("POST", "", project);
+    return project;
+  },
 
-      deleteTag: (id) => {
-        set((s) => ({
-          tags: s.tags.filter((t) => t.id !== id),
-          tasks: s.tasks.map((t) => ({
-            ...t,
-            tagIds: t.tagIds.filter((tid) => tid !== id),
-          })),
-        }));
-      },
+  updateProject: (id, updates) => {
+    set((s) => ({
+      projects: s.projects.map((p) => (p.id === id ? { ...p, ...updates } : p)),
+    }));
+    syncProject("PATCH", id, updates);
+  },
 
-      getTasksByProject: (projectId) => {
-        return get().tasks.filter((t) => t.projectId === projectId);
-      },
+  deleteProject: (id) => {
+    set((s) => ({
+      projects: s.projects.filter((p) => p.id !== id),
+      tasks: s.tasks.map((t) => (t.projectId === id ? { ...t, projectId: undefined } : t)),
+    }));
+    syncProject("DELETE", id);
+  },
 
-      getTasksByDate: (date) => {
-        return get().tasks.filter((t) => t.scheduledDate === date);
-      },
+  addTag: (tagData) => {
+    const tag: Tag = { ...tagData, id: generateId() };
+    set((s) => ({ tags: [...s.tags, tag] }));
+    syncTag("POST", "", tag);
+    return tag;
+  },
 
-      getTasksByStatus: (status) => {
-        return get().tasks.filter((t) => t.status === status);
-      },
+  updateTag: (id, updates) => {
+    set((s) => ({
+      tags: s.tags.map((t) => (t.id === id ? { ...t, ...updates } : t)),
+    }));
+  },
 
-      getOverdueTasks: () => {
-        const today = format(new Date(), "yyyy-MM-dd");
-        return get().tasks.filter(
-          (t) => t.dueDate && t.dueDate < today && t.status !== "done"
-        );
-      },
-    }),
-    {
-      name: "smart-work-tracker-v1",
-    }
-  )
-);
+  deleteTag: (id) => {
+    set((s) => ({
+      tags: s.tags.filter((t) => t.id !== id),
+      tasks: s.tasks.map((t) => ({ ...t, tagIds: t.tagIds.filter((tid) => tid !== id) })),
+    }));
+    syncTag("DELETE", id);
+  },
+
+  getTasksByProject: (projectId) => get().tasks.filter((t) => t.projectId === projectId),
+  getTasksByDate: (date) => get().tasks.filter((t) => t.scheduledDate === date),
+  getTasksByStatus: (status) => get().tasks.filter((t) => t.status === status),
+  getOverdueTasks: () => {
+    const today = format(new Date(), "yyyy-MM-dd");
+    return get().tasks.filter((t) => t.dueDate && t.dueDate < today && t.status !== "done");
+  },
+}));
