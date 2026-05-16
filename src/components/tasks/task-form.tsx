@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { PRIORITY_CONFIG } from "@/lib/utils";
 import type { Task, Priority, TaskStatus } from "@/lib/types";
-import { Tag, Calendar, Folder, Flag, Clock, Plus, X } from "lucide-react";
+import { Tag, Calendar, Folder, Flag, Clock, Plus, X, Trash2 } from "lucide-react";
 import { cn, PROJECT_COLORS, PROJECT_EMOJIS } from "@/lib/utils";
 
 interface TaskFormProps {
@@ -27,7 +27,8 @@ interface TaskFormProps {
 }
 
 export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, defaultProjectId }: TaskFormProps) {
-  const { projects, tags, addTask, updateTask, addProject } = useStore();
+  const { projects, tags, addTask, updateTask, deleteTask, addProject } = useStore();
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const [title, setTitle] = useState(editTask?.title ?? "");
   const [description, setDescription] = useState(editTask?.description ?? "");
@@ -87,7 +88,25 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, de
   };
 
   React.useEffect(() => {
-    if (open && !editTask) {
+    if (!open) {
+      setShowNewProj(false);
+      setNewProjName("");
+      setConfirmDelete(false);
+      return;
+    }
+    if (editTask) {
+      setTitle(editTask.title);
+      setDescription(editTask.description ?? "");
+      setStatus(editTask.status);
+      setPriority(editTask.priority);
+      setProjectId(editTask.projectId ?? "");
+      setDueDate(editTask.dueDate ?? "");
+      setScheduledDate(editTask.scheduledDate ?? "");
+      setScheduledTime(editTask.scheduledTime ?? "");
+      setSelectedTagIds(editTask.tagIds ?? []);
+      setShowNewProj(false);
+      setNewProjName("");
+    } else {
       setTitle("");
       setDescription("");
       setStatus("todo");
@@ -99,11 +118,8 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, de
       setSelectedTagIds([]);
       setShowNewProj(false);
       setNewProjName("");
-    } else if (!open) {
-      setShowNewProj(false);
-      setNewProjName("");
     }
-  }, [open, editTask, defaultDate, defaultTime, defaultProjectId]);
+  }, [open, editTask?.id, defaultDate, defaultTime, defaultProjectId]);
 
   const activePriority = PRIORITY_CONFIG[priority];
 
@@ -369,14 +385,53 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, de
           )}
 
           <DialogFooter className="pt-2">
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button
-              type="submit"
-              disabled={!title.trim()}
-              className="gap-2 bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white border-0 shadow-sm"
-            >
-              {editTask ? "Save Changes" : "Add Task"}
-            </Button>
+            {editTask && !confirmDelete && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="mr-auto gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={() => setConfirmDelete(true)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete
+              </Button>
+            )}
+            {confirmDelete && (
+              <div className="mr-auto flex items-center gap-2">
+                <span className="text-xs text-destructive font-medium">Delete this task?</span>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  className="h-7 px-3 text-xs"
+                  onClick={() => { deleteTask(editTask!.id); onClose(); }}
+                >
+                  Yes, delete
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => setConfirmDelete(false)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            )}
+            {!confirmDelete && (
+              <>
+                <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+                <Button
+                  type="submit"
+                  disabled={!title.trim()}
+                  className="gap-2 bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white border-0 shadow-sm"
+                >
+                  {editTask ? "Save Changes" : "Add Task"}
+                </Button>
+              </>
+            )}
           </DialogFooter>
         </form>
       </DialogContent>
