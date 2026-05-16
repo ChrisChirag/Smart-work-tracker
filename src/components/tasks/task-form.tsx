@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { PRIORITY_CONFIG } from "@/lib/utils";
 import type { Task, Priority, TaskStatus } from "@/lib/types";
-import { Tag, Calendar, Folder, Flag, Loader2 } from "lucide-react";
+import { Tag, Calendar, Folder, Flag, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface TaskFormProps {
@@ -22,10 +22,11 @@ interface TaskFormProps {
   onClose: () => void;
   editTask?: Task;
   defaultDate?: string;
+  defaultTime?: string;
   defaultProjectId?: string;
 }
 
-export function TaskForm({ open, onClose, editTask, defaultDate, defaultProjectId }: TaskFormProps) {
+export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, defaultProjectId }: TaskFormProps) {
   const { projects, tags, addTask, updateTask } = useStore();
 
   const [title, setTitle] = useState(editTask?.title ?? "");
@@ -35,8 +36,8 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultProjectI
   const [projectId, setProjectId] = useState(editTask?.projectId ?? defaultProjectId ?? "");
   const [dueDate, setDueDate] = useState(editTask?.dueDate ?? "");
   const [scheduledDate, setScheduledDate] = useState(editTask?.scheduledDate ?? defaultDate ?? "");
+  const [scheduledTime, setScheduledTime] = useState(editTask?.scheduledTime ?? defaultTime ?? "");
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>(editTask?.tagIds ?? []);
-  const [submitting, setSubmitting] = useState(false);
 
   const toggleTag = (tagId: string) => {
     setSelectedTagIds((prev) =>
@@ -48,7 +49,6 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultProjectI
     e.preventDefault();
     if (!title.trim()) return;
 
-    setSubmitting(true);
     const taskData = {
       title: title.trim(),
       description: description.trim() || undefined,
@@ -58,6 +58,7 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultProjectI
       tagIds: selectedTagIds,
       dueDate: dueDate || undefined,
       scheduledDate: scheduledDate || undefined,
+      scheduledTime: scheduledTime || undefined,
       completedAt: editTask?.completedAt,
     };
 
@@ -66,42 +67,34 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultProjectI
     } else {
       addTask(taskData);
     }
-    setSubmitting(false);
     onClose();
   };
 
   React.useEffect(() => {
-    if (!open) {
-      if (!editTask) {
-        setTitle("");
-        setDescription("");
-        setStatus("todo");
-        setPriority("medium");
-        setProjectId(defaultProjectId ?? "");
-        setDueDate("");
-        setScheduledDate(defaultDate ?? "");
-        setSelectedTagIds([]);
-      }
+    if (!open && !editTask) {
+      setTitle("");
+      setDescription("");
+      setStatus("todo");
+      setPriority("medium");
+      setProjectId(defaultProjectId ?? "");
+      setDueDate("");
+      setScheduledDate(defaultDate ?? "");
+      setScheduledTime(defaultTime ?? "");
+      setSelectedTagIds([]);
     }
-  }, [open, editTask, defaultDate, defaultProjectId]);
+  }, [open, editTask, defaultDate, defaultTime, defaultProjectId]);
 
   const activePriority = PRIORITY_CONFIG[priority];
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-lg p-0 overflow-hidden">
-        {/* Colored header strip */}
         <div className="h-1 w-full bg-gradient-to-r from-indigo-500 to-violet-500" />
 
         <div className="px-6 pt-5 pb-0">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <span
-                className={cn(
-                  "inline-flex h-6 w-6 items-center justify-center rounded-md text-xs",
-                  activePriority.bg, activePriority.color
-                )}
-              >
+              <span className={cn("inline-flex h-6 w-6 items-center justify-center rounded-md text-xs", activePriority.bg, activePriority.color)}>
                 <Flag className="h-3.5 w-3.5" />
               </span>
               {editTask ? "Edit Task" : "New Task"}
@@ -110,7 +103,6 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultProjectI
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 pb-6 pt-4 space-y-4">
-          {/* Title */}
           <div className="space-y-1.5">
             <Label htmlFor="title">Title *</Label>
             <Input
@@ -123,7 +115,6 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultProjectI
             />
           </div>
 
-          {/* Description */}
           <div className="space-y-1.5">
             <Label htmlFor="desc">Description</Label>
             <Textarea
@@ -135,7 +126,6 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultProjectI
             />
           </div>
 
-          {/* Priority + Status */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="flex items-center gap-1.5">
@@ -162,9 +152,7 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultProjectI
             <div className="space-y-1.5">
               <Label>Status</Label>
               <Select value={status} onValueChange={(v) => setStatus(v as TaskStatus)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todo">To Do</SelectItem>
                   <SelectItem value="in_progress">In Progress</SelectItem>
@@ -174,24 +162,18 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultProjectI
             </div>
           </div>
 
-          {/* Project */}
           <div className="space-y-1.5">
             <Label className="flex items-center gap-1.5">
               <Folder className="h-3.5 w-3.5" />
               Project
             </Label>
             <Select value={projectId || "none"} onValueChange={(v) => setProjectId(v === "none" ? "" : v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="No project" />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="No project" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">No project</SelectItem>
                 {projects.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
-                    <span className="flex items-center gap-2">
-                      <span>{p.emoji}</span>
-                      {p.name}
-                    </span>
+                    <span className="flex items-center gap-2"><span>{p.emoji}</span>{p.name}</span>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -205,11 +187,7 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultProjectI
                 <Calendar className="h-3.5 w-3.5" />
                 Due Date
               </Label>
-              <Input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-              />
+              <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
             </div>
             <div className="space-y-1.5">
               <Label className="flex items-center gap-1.5">
@@ -219,12 +197,30 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultProjectI
               <Input
                 type="date"
                 value={scheduledDate}
-                onChange={(e) => setScheduledDate(e.target.value)}
+                onChange={(e) => {
+                  setScheduledDate(e.target.value);
+                  if (!e.target.value) setScheduledTime("");
+                }}
               />
             </div>
           </div>
 
-          {/* Tags */}
+          {/* Time — shown only when a scheduled date is set */}
+          {scheduledDate && (
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5" />
+                Time
+                <span className="text-muted-foreground font-normal text-xs">(optional — places task on calendar)</span>
+              </Label>
+              <Input
+                type="time"
+                value={scheduledTime}
+                onChange={(e) => setScheduledTime(e.target.value)}
+              />
+            </div>
+          )}
+
           {tags.length > 0 && (
             <div className="space-y-1.5">
               <Label className="flex items-center gap-1.5">
@@ -257,15 +253,12 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultProjectI
           )}
 
           <DialogFooter className="pt-2">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
+            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
             <Button
               type="submit"
-              disabled={!title.trim() || submitting}
+              disabled={!title.trim()}
               className="gap-2 bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white border-0 shadow-sm"
             >
-              {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
               {editTask ? "Save Changes" : "Add Task"}
             </Button>
           </DialogFooter>

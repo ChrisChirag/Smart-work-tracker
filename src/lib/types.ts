@@ -26,6 +26,7 @@ export interface Task {
   tagIds: string[];
   dueDate?: string;
   scheduledDate?: string;
+  scheduledTime?: string;
   completedAt?: string;
   createdAt: string;
   updatedAt: string;

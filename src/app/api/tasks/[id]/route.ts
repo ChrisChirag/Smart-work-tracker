@@ -18,6 +18,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if ("tagIds" in updates) dbUpdates.tag_ids = updates.tagIds;
   if ("dueDate" in updates) dbUpdates.due_date = updates.dueDate ?? null;
   if ("scheduledDate" in updates) dbUpdates.scheduled_date = updates.scheduledDate ?? null;
+  if ("scheduledTime" in updates) dbUpdates.scheduled_time = updates.scheduledTime ?? null;
   if ("completedAt" in updates) dbUpdates.completed_at = updates.completedAt ?? null;
 
   const { data, error } = await db.from("tasks").update(dbUpdates).eq("id", params.id).eq("user_id", uid).select().single();

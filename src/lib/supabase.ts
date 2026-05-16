@@ -29,6 +29,7 @@ export function rowToTask(row: Record<string, unknown>) {
     tagIds: (row.tag_ids as string[]) ?? [],
     dueDate: row.due_date as string | undefined,
     scheduledDate: row.scheduled_date as string | undefined,
+    scheduledTime: row.scheduled_time as string | undefined,
     completedAt: row.completed_at as string | undefined,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
