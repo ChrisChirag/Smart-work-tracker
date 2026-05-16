@@ -158,12 +158,12 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultProjectI
               <Folder className="h-3.5 w-3.5" />
               Project
             </Label>
-            <Select value={projectId} onValueChange={setProjectId}>
+            <Select value={projectId || "none"} onValueChange={(v) => setProjectId(v === "none" ? "" : v)}>
               <SelectTrigger>
                 <SelectValue placeholder="No project" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">No project</SelectItem>
+                <SelectItem value="none">No project</SelectItem>
                 {projects.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
                     <span className="flex items-center gap-2">

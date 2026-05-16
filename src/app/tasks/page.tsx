@@ -34,7 +34,8 @@ export default function TasksPage() {
         if (activeTab !== "all" && t.status !== activeTab) return false;
         if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
         if (filterPriority !== "all" && t.priority !== filterPriority) return false;
-        if (filterProject !== "all" && t.projectId !== filterProject) return false;
+        if (filterProject === "none" && t.projectId) return false;
+        if (filterProject !== "all" && filterProject !== "none" && t.projectId !== filterProject) return false;
         if (filterTag !== "all" && !t.tagIds.includes(filterTag)) return false;
         return true;
       })
@@ -100,7 +101,7 @@ export default function TasksPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All projects</SelectItem>
-              <SelectItem value="">No project</SelectItem>
+              <SelectItem value="none">No project</SelectItem>
               {projects.map((p) => (
                 <SelectItem key={p.id} value={p.id}>
                   {p.emoji} {p.name}
