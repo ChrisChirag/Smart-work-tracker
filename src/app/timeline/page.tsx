@@ -14,11 +14,12 @@ import { cn } from "@/lib/utils";
 import {
   ChevronLeft, ChevronRight, Plus, CalendarDays, LayoutList,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type ViewMode = "day" | "week";
 
 export default function TimelinePage() {
-  const { tasks } = useStore();
+  const { tasks, isLoaded } = useStore();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [addOpen, setAddOpen] = useState(false);
@@ -43,6 +44,34 @@ export default function TimelinePage() {
     tasks.filter((t) => t.scheduledDate === dateStr);
 
   const dayTasks = getTasksForDay(selectedStr);
+
+  if (!isLoaded) {
+    return (
+      <>
+        <Header title="Timeline" />
+        <div className="p-4 md:p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex gap-1">
+              <Skeleton className="h-8 w-8 rounded-lg" />
+              <Skeleton className="h-8 w-16 rounded-lg" />
+              <Skeleton className="h-8 w-8 rounded-lg" />
+            </div>
+            <Skeleton className="h-8 w-32 rounded-lg" />
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {Array.from({ length: 7 }).map((_, i) => (
+              <Skeleton key={i} className="h-16 rounded-xl" />
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-3">
+            {Array.from({ length: 7 }).map((_, i) => (
+              <Skeleton key={i} className="h-40 rounded-xl" />
+            ))}
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>

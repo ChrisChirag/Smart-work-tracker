@@ -129,9 +129,27 @@ function ProjectForm({
 }
 
 export default function ProjectsPage() {
-  const { projects, tasks, deleteProject } = useStore();
+  const { projects, tasks, deleteProject, isLoaded } = useStore();
   const [addOpen, setAddOpen] = useState(false);
   const [editId, setEditId] = useState<string | undefined>();
+
+  if (!isLoaded) {
+    return (
+      <>
+        <Header title="Projects" />
+        <div className="p-4 md:p-6 space-y-4">
+          <div className="flex justify-end">
+            <Skeleton className="h-9 w-36 rounded-lg" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-48 w-full rounded-xl" />
+            ))}
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>

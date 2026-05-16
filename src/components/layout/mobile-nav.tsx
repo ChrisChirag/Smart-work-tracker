@@ -24,7 +24,7 @@ export function MobileNav() {
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-md">
       {/* Subtle top gradient border */}
       <div className="h-px w-full bg-gradient-to-r from-transparent via-border to-transparent" />
-      <div className="flex items-center justify-around px-1 py-1.5 pb-safe">
+      <div className="flex items-center justify-around px-1 py-1.5">
         {NAV.map(({ href, icon: Icon, label }) => {
           const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
           return (
