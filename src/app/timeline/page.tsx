@@ -126,7 +126,7 @@ function AutoScheduleDialog({
                             <p className="text-sm font-medium truncate">{task.title}</p>
                             {proj && (
                               <p className="text-xs text-muted-foreground truncate">
-                                {proj.emoji} {proj.name}
+                                {proj.name}
                               </p>
                             )}
                           </div>
@@ -552,7 +552,7 @@ export default function TimelinePage() {
                             </p>
                             <p className="text-[10px] opacity-75 mt-0.5">
                               {task.scheduledTime}
-                              {proj && ` · ${proj.emoji} ${proj.name}`}
+                              {proj && ` · ${proj.name}`}
                             </p>
                           </div>
                         );

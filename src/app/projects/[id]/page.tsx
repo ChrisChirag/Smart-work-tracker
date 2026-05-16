@@ -82,7 +82,7 @@ export default function ProjectDetailPage() {
   return (
     <>
       <Header
-        title={`${project.emoji} ${project.name}`}
+        title={project.name}
         subtitle={project.description}
       />
 

@@ -373,7 +373,9 @@ export default function Dashboard() {
                   return (
                     <Link key={project.id} href={`/projects/${project.id}`}>
                       <div className="flex items-center gap-3 rounded-lg p-2 hover:bg-accent transition-colors cursor-pointer">
-                        <span className="text-lg">{project.emoji}</span>
+                        <div className="h-8 w-8 rounded-lg shrink-0 flex items-center justify-center" style={{ backgroundColor: project.color + "20" }}>
+                          <div className="h-3 w-3 rounded-full" style={{ backgroundColor: project.color }} />
+                        </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{project.name}</p>
                           <div className="flex items-center gap-2 mt-1">

@@ -12,7 +12,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { AlertDialog } from "@/components/ui/alert-dialog";
-import { PROJECT_COLORS, PROJECT_EMOJIS, cn } from "@/lib/utils";
+import { PROJECT_COLORS, cn } from "@/lib/utils";
 import { Plus, Folder, CheckCircle2, Clock, Circle, Trash2, Pencil, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -30,14 +30,12 @@ function ProjectForm({
   const [name, setName] = useState(existing?.name ?? "");
   const [description, setDescription] = useState(existing?.description ?? "");
   const [color, setColor] = useState(existing?.color ?? PROJECT_COLORS[0]);
-  const [emoji, setEmoji] = useState(existing?.emoji ?? PROJECT_EMOJIS[0]);
 
   React.useEffect(() => {
     if (open) {
       setName(existing?.name ?? "");
       setDescription(existing?.description ?? "");
       setColor(existing?.color ?? PROJECT_COLORS[0]);
-      setEmoji(existing?.emoji ?? PROJECT_EMOJIS[0]);
     }
   }, [open, editId]);
 
@@ -45,9 +43,9 @@ function ProjectForm({
     e.preventDefault();
     if (!name.trim()) return;
     if (editId) {
-      updateProject(editId, { name: name.trim(), description: description.trim(), color, emoji });
+      updateProject(editId, { name: name.trim(), description: description.trim(), color });
     } else {
-      addProject({ name: name.trim(), description: description.trim(), color, emoji });
+      addProject({ name: name.trim(), description: description.trim(), color });
     }
     onClose();
   };
@@ -80,25 +78,6 @@ function ProjectForm({
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
             />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Emoji</Label>
-            <div className="flex flex-wrap gap-2">
-              {PROJECT_EMOJIS.map((e) => (
-                <button
-                  key={e}
-                  type="button"
-                  onClick={() => setEmoji(e)}
-                  className={cn(
-                    "text-xl h-9 w-9 flex items-center justify-center rounded-lg border-2 transition-all",
-                    emoji === e ? "border-primary bg-primary/10" : "border-transparent hover:bg-muted"
-                  )}
-                >
-                  {e}
-                </button>
-              ))}
-            </div>
           </div>
 
           <div className="space-y-1.5">
@@ -212,10 +191,10 @@ export default function ProjectsPage() {
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-2.5">
                         <div
-                          className="flex h-10 w-10 items-center justify-center rounded-xl text-xl"
+                          className="flex h-10 w-10 items-center justify-center rounded-xl shrink-0"
                           style={{ backgroundColor: project.color + "20" }}
                         >
-                          {project.emoji}
+                          <Folder className="h-5 w-5" style={{ color: project.color }} />
                         </div>
                         <div>
                           <p className="font-semibold leading-tight">{project.name}</p>

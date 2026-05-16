@@ -13,7 +13,6 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if ("name" in updates) dbUpdates.name = updates.name;
   if ("description" in updates) dbUpdates.description = updates.description ?? null;
   if ("color" in updates) dbUpdates.color = updates.color;
-  if ("emoji" in updates) dbUpdates.emoji = updates.emoji;
 
   const { data, error } = await db.from("projects").update(dbUpdates).eq("id", params.id).eq("user_id", uid).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

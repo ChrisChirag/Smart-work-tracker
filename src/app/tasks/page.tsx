@@ -24,7 +24,7 @@ interface ActiveFiltersProps {
   filterPriority: string;
   filterProject: string;
   filterTag: string;
-  projects: { id: string; name: string; emoji: string }[];
+  projects: { id: string; name: string; color: string }[];
   tags: { id: string; name: string }[];
   onClearSearch: () => void;
   onClearPriority: () => void;
@@ -49,7 +49,7 @@ function ActiveFilters({
   const projectLabel = filterProject === "none"
     ? "No project"
     : projects.find((p) => p.id === filterProject)
-      ? `${projects.find((p) => p.id === filterProject)!.emoji} ${projects.find((p) => p.id === filterProject)!.name}`
+      ? projects.find((p) => p.id === filterProject)!.name
       : null;
 
   const tagLabel = tags.find((t) => t.id === filterTag)?.name;
@@ -231,7 +231,7 @@ export default function TasksPage() {
               <SelectItem value="none">No project</SelectItem>
               {projects.map((p) => (
                 <SelectItem key={p.id} value={p.id}>
-                  {p.emoji} {p.name}
+                  {p.name}
                 </SelectItem>
               ))}
             </SelectContent>

@@ -12,7 +12,6 @@ export interface Project {
   name: string;
   description?: string;
   color: string;
-  emoji: string;
   createdAt: string;
 }
 

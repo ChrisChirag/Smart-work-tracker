@@ -42,7 +42,6 @@ export function rowToProject(row: Record<string, unknown>) {
     name: row.name as string,
     description: row.description as string | undefined,
     color: row.color as string,
-    emoji: row.emoji as string,
     createdAt: row.created_at as string,
   };
 }
