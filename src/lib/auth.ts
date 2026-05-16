@@ -1,7 +1,13 @@
 import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 
-const allowedEmail = process.env.ALLOWED_EMAIL;
+// Comma-separated list of allowed emails, e.g. "a@gmail.com,b@gmail.com"
+const allowedEmails: Set<string> = new Set(
+  (process.env.ALLOWED_EMAILS ?? process.env.ALLOWED_EMAIL ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean)
+);
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -18,11 +24,8 @@ export const authOptions: NextAuthOptions = {
 
   callbacks: {
     async signIn({ user }) {
-      // If ALLOWED_EMAIL is set, restrict to that single account
-      if (allowedEmail && user.email !== allowedEmail) {
-        return false;
-      }
-      return true;
+      if (allowedEmails.size === 0) return true; // no restriction if env var is unset
+      return allowedEmails.has((user.email ?? "").toLowerCase());
     },
 
     async session({ session, token }) {
