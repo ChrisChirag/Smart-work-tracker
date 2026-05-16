@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import { format } from "date-fns";
 import { useStore } from "@/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { PRIORITY_CONFIG } from "@/lib/utils";
 import type { Task, Priority, TaskStatus } from "@/lib/types";
-import { Tag, Calendar, Folder } from "lucide-react";
+import { Tag, Calendar, Folder, Flag, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface TaskFormProps {
@@ -37,6 +36,7 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultProjectI
   const [dueDate, setDueDate] = useState(editTask?.dueDate ?? "");
   const [scheduledDate, setScheduledDate] = useState(editTask?.scheduledDate ?? defaultDate ?? "");
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>(editTask?.tagIds ?? []);
+  const [submitting, setSubmitting] = useState(false);
 
   const toggleTag = (tagId: string) => {
     setSelectedTagIds((prev) =>
@@ -48,6 +48,7 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultProjectI
     e.preventDefault();
     if (!title.trim()) return;
 
+    setSubmitting(true);
     const taskData = {
       title: title.trim(),
       description: description.trim() || undefined,
@@ -65,10 +66,10 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultProjectI
     } else {
       addTask(taskData);
     }
+    setSubmitting(false);
     onClose();
   };
 
-  // Reset when dialog closes
   React.useEffect(() => {
     if (!open) {
       if (!editTask) {
@@ -84,14 +85,31 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultProjectI
     }
   }, [open, editTask, defaultDate, defaultProjectId]);
 
+  const activePriority = PRIORITY_CONFIG[priority];
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{editTask ? "Edit Task" : "New Task"}</DialogTitle>
-        </DialogHeader>
+      <DialogContent className="max-w-lg p-0 overflow-hidden">
+        {/* Colored header strip */}
+        <div className="h-1 w-full bg-gradient-to-r from-indigo-500 to-violet-500" />
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="px-6 pt-5 pb-0">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <span
+                className={cn(
+                  "inline-flex h-6 w-6 items-center justify-center rounded-md text-xs",
+                  activePriority.bg, activePriority.color
+                )}
+              >
+                <Flag className="h-3.5 w-3.5" />
+              </span>
+              {editTask ? "Edit Task" : "New Task"}
+            </DialogTitle>
+          </DialogHeader>
+        </div>
+
+        <form onSubmit={handleSubmit} className="px-6 pb-6 pt-4 space-y-4">
           {/* Title */}
           <div className="space-y-1.5">
             <Label htmlFor="title">Title *</Label>
@@ -101,6 +119,7 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultProjectI
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               autoFocus
+              className="text-base"
             />
           </div>
 
@@ -109,7 +128,7 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultProjectI
             <Label htmlFor="desc">Description</Label>
             <Textarea
               id="desc"
-              placeholder="Add details..."
+              placeholder="Add details…"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
@@ -119,7 +138,10 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultProjectI
           {/* Priority + Status */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Priority</Label>
+              <Label className="flex items-center gap-1.5">
+                <Flag className="h-3.5 w-3.5" />
+                Priority
+              </Label>
               <Select value={priority} onValueChange={(v) => setPriority(v as Priority)}>
                 <SelectTrigger>
                   <SelectValue />
@@ -210,38 +232,40 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultProjectI
                 Tags
               </Label>
               <div className="flex flex-wrap gap-2">
-                {tags.map((tag) => (
-                  <button
-                    key={tag.id}
-                    type="button"
-                    onClick={() => toggleTag(tag.id)}
-                    className={cn(
-                      "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium border transition-all",
-                      selectedTagIds.includes(tag.id)
-                        ? "border-transparent text-white"
-                        : "border-border bg-background text-muted-foreground hover:border-primary"
-                    )}
-                    style={
-                      selectedTagIds.includes(tag.id)
-                        ? { backgroundColor: tag.color }
-                        : {}
-                    }
-                  >
-                    {selectedTagIds.includes(tag.id) && (
-                      <span className="h-1.5 w-1.5 rounded-full bg-white/80" />
-                    )}
-                    {tag.name}
-                  </button>
-                ))}
+                {tags.map((tag) => {
+                  const selected = selectedTagIds.includes(tag.id);
+                  return (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      onClick={() => toggleTag(tag.id)}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium border transition-all",
+                        selected
+                          ? "border-transparent text-white shadow-sm"
+                          : "border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                      )}
+                      style={selected ? { backgroundColor: tag.color } : {}}
+                    >
+                      {selected && <span className="h-1.5 w-1.5 rounded-full bg-white/80" />}
+                      {tag.name}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="pt-2">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={!title.trim()}>
+            <Button
+              type="submit"
+              disabled={!title.trim() || submitting}
+              className="gap-2 bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white border-0 shadow-sm"
+            >
+              {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
               {editTask ? "Save Changes" : "Add Task"}
             </Button>
           </DialogFooter>

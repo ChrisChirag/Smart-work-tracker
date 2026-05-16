@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import {
-  format, addDays, subDays, parseISO, isToday, isSameDay,
+  format, addDays, isToday, isSameDay,
   startOfWeek, endOfWeek, eachDayOfInterval,
 } from "date-fns";
 import { useStore } from "@/store";
@@ -34,12 +34,10 @@ export default function TimelinePage() {
 
   const goToday = () => setSelectedDate(new Date());
 
-  // Get days for week view
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
   const weekEnd = endOfWeek(selectedDate, { weekStartsOn: 1 });
   const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
 
-  // Tasks for a given day
   const getTasksForDay = (dateStr: string) =>
     tasks.filter((t) => t.scheduledDate === dateStr);
 
@@ -91,7 +89,7 @@ export default function TimelinePage() {
             <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigate(-1)}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <Button variant="outline" size="sm" className="h-8" onClick={goToday}>
+            <Button variant="outline" size="sm" className="h-8 px-3" onClick={goToday}>
               Today
             </Button>
             <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigate(1)}>
@@ -100,7 +98,6 @@ export default function TimelinePage() {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* View toggle */}
             <div className="flex rounded-lg border p-0.5">
               <button
                 onClick={() => setViewMode("day")}
@@ -128,13 +125,9 @@ export default function TimelinePage() {
               </button>
             </div>
 
-            <Button
-              size="sm"
-              className="h-8 gap-1.5"
-              onClick={() => setAddOpen(true)}
-            >
+            <Button size="sm" className="h-8 gap-1.5" onClick={() => setAddOpen(true)}>
               <Plus className="h-4 w-4" />
-              Add Task
+              <span className="hidden sm:inline">Add Task</span>
             </Button>
           </div>
         </div>
@@ -142,11 +135,11 @@ export default function TimelinePage() {
         {/* Week view */}
         {viewMode === "week" && (
           <div className="space-y-4">
-            {/* Mini calendar strip */}
+            {/* Day picker strip */}
             <div className="grid grid-cols-7 gap-1">
               {weekDays.map((day) => {
                 const dayStr = format(day, "yyyy-MM-dd");
-                const dayTasks = getTasksForDay(dayStr);
+                const dayTaskCount = getTasksForDay(dayStr).length;
                 const isSelected = isSameDay(day, selectedDate);
                 const today = isToday(day);
 
@@ -172,9 +165,9 @@ export default function TimelinePage() {
                     <span className={cn("text-sm font-bold", today && !isSelected && "text-primary")}>
                       {format(day, "d")}
                     </span>
-                    {dayTasks.length > 0 && (
+                    {dayTaskCount > 0 ? (
                       <div className="flex gap-0.5">
-                        {dayTasks.slice(0, 3).map((t, i) => (
+                        {Array.from({ length: Math.min(dayTaskCount, 3) }).map((_, i) => (
                           <span
                             key={i}
                             className={cn(
@@ -184,48 +177,70 @@ export default function TimelinePage() {
                           />
                         ))}
                       </div>
+                    ) : (
+                      <div className="h-2" />
                     )}
-                    {dayTasks.length === 0 && <div className="h-2" />}
                   </button>
                 );
               })}
             </div>
 
             {/* Day columns — horizontal scroll on mobile */}
-            <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
-              {weekDays.map((day) => {
-                const dayStr = format(day, "yyyy-MM-dd");
-                const colTasks = getTasksForDay(dayStr);
-                const today = isToday(day);
+            <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0 scrollbar-hide">
+              <div className="flex gap-3 md:grid md:grid-cols-7 min-w-[560px] md:min-w-0">
+                {weekDays.map((day) => {
+                  const dayStr = format(day, "yyyy-MM-dd");
+                  const colTasks = getTasksForDay(dayStr);
+                  const today = isToday(day);
+                  const isSelected = isSameDay(day, selectedDate);
 
-                return (
-                  <div key={dayStr} className={cn("md:min-h-[200px]", !today && "hidden md:block")}>
+                  return (
                     <div
+                      key={dayStr}
                       className={cn(
-                        "text-xs font-semibold mb-2 text-center",
-                        today ? "text-primary" : "text-muted-foreground"
+                        "flex-1 min-w-[100px] md:min-w-0 rounded-xl border transition-all",
+                        today ? "border-primary/30 bg-primary/5" : "border-border bg-muted/20",
+                        isSelected && "ring-1 ring-primary/30"
                       )}
                     >
-                      {today ? "Today" : format(day, "EEE d")}
+                      <div
+                        className={cn(
+                          "text-xs font-semibold py-2 px-2 text-center rounded-t-xl",
+                          today ? "text-primary bg-primary/10" : "text-muted-foreground"
+                        )}
+                      >
+                        {today ? "Today" : format(day, "EEE d")}
+                      </div>
+                      <div className="p-1.5 space-y-1.5 min-h-[80px]">
+                        {colTasks.length === 0 ? (
+                          <button
+                            className="w-full h-14 rounded-lg border border-dashed flex items-center justify-center text-muted-foreground/50 hover:border-primary hover:text-primary transition-colors text-xs"
+                            onClick={() => {
+                              setSelectedDate(day);
+                              setAddOpen(true);
+                            }}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        ) : (
+                          <>
+                            {colTasks.map((t) => <TaskCard key={t.id} task={t} compact />)}
+                            <button
+                              className="w-full rounded-lg border border-dashed flex items-center justify-center text-muted-foreground/50 hover:border-primary hover:text-primary transition-colors py-1"
+                              onClick={() => {
+                                setSelectedDate(day);
+                                setAddOpen(true);
+                              }}
+                            >
+                              <Plus className="h-3 w-3" />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
-                    <div className="space-y-1.5 rounded-xl bg-muted/30 p-2 min-h-[80px]">
-                      {colTasks.length === 0 ? (
-                        <button
-                          className="w-full h-16 rounded-lg border border-dashed flex items-center justify-center text-muted-foreground hover:border-primary hover:text-primary transition-colors"
-                          onClick={() => {
-                            setSelectedDate(day);
-                            setAddOpen(true);
-                          }}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </button>
-                      ) : (
-                        colTasks.map((t) => <TaskCard key={t.id} task={t} compact />)
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
@@ -237,23 +252,23 @@ export default function TimelinePage() {
               <h2 className="font-semibold text-sm">
                 {isToday(selectedDate) ? "Today" : format(selectedDate, "EEEE, MMMM d")}
                 <span className="ml-2 text-muted-foreground font-normal">
-                  {dayTasks.length} task{dayTasks.length !== 1 ? "s" : ""}
+                  · {dayTasks.length} task{dayTasks.length !== 1 ? "s" : ""}
                 </span>
               </h2>
             </div>
 
             {dayTasks.length === 0 ? (
               <div className="rounded-xl border border-dashed py-16 text-center space-y-3">
-                <CalendarDays className="h-10 w-10 mx-auto text-muted-foreground/30" />
-                <p className="text-sm text-muted-foreground">
-                  Nothing scheduled for this day
-                </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setAddOpen(true)}
-                  className="gap-1.5"
-                >
+                <CalendarDays className="h-10 w-10 mx-auto text-muted-foreground/25" />
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    Nothing scheduled for this day
+                  </p>
+                  <p className="text-xs text-muted-foreground/60 mt-1">
+                    Add a task and set its scheduled date to this day.
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => setAddOpen(true)} className="gap-1.5">
                   <Plus className="h-4 w-4" />
                   Schedule a task
                 </Button>

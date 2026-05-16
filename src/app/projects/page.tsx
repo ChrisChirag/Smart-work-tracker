@@ -54,11 +54,14 @@ function ProjectForm({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{editId ? "Edit Project" : "New Project"}</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+      <DialogContent className="p-0 overflow-hidden">
+        <div className="h-1 w-full bg-gradient-to-r from-indigo-500 to-violet-500" />
+        <div className="px-6 pt-5 pb-0">
+          <DialogHeader>
+            <DialogTitle>{editId ? "Edit Project" : "New Project"}</DialogTitle>
+          </DialogHeader>
+        </div>
+        <form onSubmit={handleSubmit} className="px-6 pb-6 pt-4 space-y-4">
           <div className="space-y-1.5">
             <Label>Name *</Label>
             <Input
@@ -118,7 +121,11 @@ function ProjectForm({
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={!name.trim()}>
+            <Button
+              type="submit"
+              disabled={!name.trim()}
+              className="bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white border-0 shadow-sm"
+            >
               {editId ? "Save Changes" : "Create Project"}
             </Button>
           </DialogFooter>
