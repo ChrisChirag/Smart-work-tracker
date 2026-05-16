@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
   format, addDays, isToday, isSameDay,
   startOfWeek, endOfWeek, eachDayOfInterval,
@@ -10,10 +10,12 @@ import { Header } from "@/components/layout/header";
 import { TaskForm } from "@/components/tasks/task-form";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { autoSchedule } from "@/lib/schedule";
 import type { Task, Priority } from "@/lib/types";
 import {
-  ChevronLeft, ChevronRight, CalendarDays, LayoutList,
+  ChevronLeft, ChevronRight, CalendarDays, LayoutList, Zap, AlertCircle,
 } from "lucide-react";
 
 // ─── Layout constants ────────────────────────────────────────────────────────
@@ -21,12 +23,18 @@ const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const ROW_H = 64; // px per hour
 const TIME_W = 52; // px for the time-label gutter
 
-// Priority → solid hex for task blocks
 const PRIORITY_HEX: Record<Priority, string> = {
   urgent: "#ef4444",
   high:   "#f97316",
   medium: "#6366f1",
   low:    "#94a3b8",
+};
+
+const PRIORITY_LABEL: Record<Priority, string> = {
+  urgent: "Urgent",
+  high: "High",
+  medium: "Medium",
+  low: "Low",
 };
 
 function fmtHour(h: number): string {
@@ -37,6 +45,150 @@ function fmtHour(h: number): string {
 }
 
 type ViewMode = "day" | "week";
+
+// ─── Auto-schedule preview dialog ────────────────────────────────────────────
+function AutoScheduleDialog({
+  open,
+  onClose,
+  date,
+}: {
+  open: boolean;
+  onClose: () => void;
+  date: string;
+}) {
+  const { tasks, projects, batchScheduleTasks } = useStore();
+
+  const result = useMemo(() => {
+    if (!open) return null;
+    const alreadyScheduled = tasks.filter((t) => t.scheduledDate === date && t.scheduledTime && t.status !== "done");
+    const candidates = tasks.filter(
+      (t) =>
+        t.status !== "done" &&
+        !t.scheduledTime &&
+        (t.scheduledDate === date || (!t.scheduledDate && (!t.dueDate || t.dueDate >= date)))
+    );
+    return autoSchedule(candidates, alreadyScheduled, date);
+  }, [open, tasks, date]);
+
+  const handleApply = () => {
+    if (result && result.assignments.length > 0) {
+      batchScheduleTasks(result.assignments);
+    }
+    onClose();
+  };
+
+  if (!result) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-md p-0 overflow-hidden">
+        <div className="h-1 w-full bg-gradient-to-r from-indigo-500 to-violet-500" />
+        <div className="px-6 pt-5 pb-0">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Zap className="h-4 w-4 text-primary" />
+              Auto-Schedule for {format(new Date(date + "T12:00:00"), "MMMM d")}
+            </DialogTitle>
+          </DialogHeader>
+        </div>
+
+        <div className="px-6 pt-4 pb-2 space-y-3">
+          {result.assignments.length === 0 && result.unscheduled.length === 0 ? (
+            <div className="rounded-xl border border-dashed py-8 text-center">
+              <Zap className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
+              <p className="text-sm text-muted-foreground">No tasks to schedule</p>
+              <p className="text-xs text-muted-foreground/70 mt-1">
+                Create tasks without a time and they will appear here.
+              </p>
+            </div>
+          ) : (
+            <>
+              {result.assignments.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Will be scheduled ({result.assignments.length})
+                  </p>
+                  <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+                    {result.assignments.map((a) => {
+                      const task = tasks.find((t) => t.id === a.taskId);
+                      if (!task) return null;
+                      const proj = projects.find((p) => p.id === task.projectId);
+                      return (
+                        <div
+                          key={a.taskId}
+                          className="flex items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2"
+                        >
+                          <div
+                            className="h-2 w-2 rounded-full shrink-0"
+                            style={{ backgroundColor: PRIORITY_HEX[task.priority] }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{task.title}</p>
+                            {proj && (
+                              <p className="text-xs text-muted-foreground truncate">
+                                {proj.emoji} {proj.name}
+                              </p>
+                            )}
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <p className="text-sm font-semibold tabular-nums">
+                              {a.scheduledTime}
+                            </p>
+                            <p
+                              className="text-[10px] font-medium"
+                              style={{ color: PRIORITY_HEX[task.priority] }}
+                            >
+                              {PRIORITY_LABEL[task.priority]}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {result.unscheduled.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3 text-amber-500" />
+                    Could not fit ({result.unscheduled.length})
+                  </p>
+                  <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
+                    {result.unscheduled.map((task) => (
+                      <div key={task.id} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/30">
+                        <div
+                          className="h-1.5 w-1.5 rounded-full shrink-0"
+                          style={{ backgroundColor: PRIORITY_HEX[task.priority] }}
+                        />
+                        <p className="text-xs text-amber-700 dark:text-amber-400 truncate">{task.title}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    The working day is full. Schedule these on another day or remove time blocks.
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <DialogFooter className="px-6 pb-5 pt-3">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button
+            onClick={handleApply}
+            disabled={result.assignments.length === 0}
+            className="gap-2 bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white border-0"
+          >
+            <Zap className="h-3.5 w-3.5" />
+            Apply Schedule
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 // ─── Component ───────────────────────────────────────────────────────────────
 export default function TimelinePage() {
@@ -50,6 +202,9 @@ export default function TimelinePage() {
   const [newTime, setNewTime] = useState("");
   const [editTask, setEditTask] = useState<Task | undefined>();
   const [editOpen, setEditOpen] = useState(false);
+
+  // Auto-schedule dialog
+  const [scheduleOpen, setScheduleOpen] = useState(false);
 
   // Current time indicator — updates every minute
   const [nowTop, setNowTop] = useState(() => {
@@ -89,6 +244,18 @@ export default function TimelinePage() {
 
   const getTasksForDay = (dateStr: string) =>
     tasks.filter((t) => t.scheduledDate === dateStr);
+
+  // Count unscheduled (no time) tasks for the selected day
+  const scheduleDate = format(selectedDate, "yyyy-MM-dd");
+  const unscheduledCount = useMemo(() => {
+    const today = scheduleDate;
+    return tasks.filter(
+      (t) =>
+        t.status !== "done" &&
+        !t.scheduledTime &&
+        (t.scheduledDate === today || (!t.scheduledDate && (!t.dueDate || t.dueDate >= today)))
+    ).length;
+  }, [tasks, scheduleDate]);
 
   // ─── Interaction handlers ───────────────────────────────────────────────────
   const handleSlotDblClick = (day: Date, hour: number) => {
@@ -148,7 +315,7 @@ export default function TimelinePage() {
       <div className="flex flex-col flex-1 overflow-hidden min-h-0">
 
         {/* ── Controls bar ── */}
-        <div className="shrink-0 flex items-center justify-between gap-2 px-4 py-2 border-b bg-background">
+        <div className="shrink-0 flex items-center justify-between gap-2 px-4 py-2 border-b bg-background flex-wrap">
           <div className="flex items-center gap-1">
             <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigate(-1)}>
               <ChevronLeft className="h-4 w-4" />
@@ -161,25 +328,43 @@ export default function TimelinePage() {
             </Button>
           </div>
 
-          <div className="flex rounded-lg border p-0.5">
-            {([
-              { mode: "day" as ViewMode, icon: LayoutList, label: "Day" },
-              { mode: "week" as ViewMode, icon: CalendarDays, label: "Week" },
-            ] as const).map(({ mode, icon: Icon, label }) => (
-              <button
-                key={mode}
-                onClick={() => setViewMode(mode)}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all",
-                  viewMode === mode
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {label}
-              </button>
-            ))}
+          <div className="flex items-center gap-2">
+            {/* Auto-schedule button */}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5 text-primary border-primary/30 hover:bg-primary/5"
+              onClick={() => setScheduleOpen(true)}
+            >
+              <Zap className="h-3.5 w-3.5" />
+              Auto-schedule
+              {unscheduledCount > 0 && (
+                <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground px-1">
+                  {unscheduledCount}
+                </span>
+              )}
+            </Button>
+
+            <div className="flex rounded-lg border p-0.5">
+              {([
+                { mode: "day" as ViewMode, icon: LayoutList, label: "Day" },
+                { mode: "week" as ViewMode, icon: CalendarDays, label: "Week" },
+              ] as const).map(({ mode, icon: Icon, label }) => (
+                <button
+                  key={mode}
+                  onClick={() => setViewMode(mode)}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all",
+                    viewMode === mode
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -331,7 +516,6 @@ export default function TimelinePage() {
                           onDoubleClick={() => handleSlotDblClick(day, h)}
                           title={`Double-click to add task at ${fmtHour(h)}`}
                         >
-                          {/* Hover hint */}
                           <span className="absolute inset-0 flex items-center justify-center text-[10px] text-primary/0 group-hover:text-primary/40 transition-colors pointer-events-none select-none">
                             double-click to add
                           </span>
@@ -406,6 +590,13 @@ export default function TimelinePage() {
         open={editOpen}
         onClose={() => { setEditOpen(false); setEditTask(undefined); }}
         editTask={editTask}
+      />
+
+      {/* Auto-schedule preview */}
+      <AutoScheduleDialog
+        open={scheduleOpen}
+        onClose={() => setScheduleOpen(false)}
+        date={scheduleDate}
       />
     </>
   );

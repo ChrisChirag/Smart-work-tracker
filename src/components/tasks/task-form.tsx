@@ -87,7 +87,7 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, de
   };
 
   React.useEffect(() => {
-    if (!open && !editTask) {
+    if (open && !editTask) {
       setTitle("");
       setDescription("");
       setStatus("todo");
@@ -97,8 +97,9 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, de
       setScheduledDate(defaultDate ?? "");
       setScheduledTime(defaultTime ?? "");
       setSelectedTagIds([]);
-    }
-    if (!open) {
+      setShowNewProj(false);
+      setNewProjName("");
+    } else if (!open) {
       setShowNewProj(false);
       setNewProjName("");
     }

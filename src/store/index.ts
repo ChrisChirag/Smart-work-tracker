@@ -30,6 +30,9 @@ interface Store {
   updateTag: (id: string, updates: Partial<Tag>) => void;
   deleteTag: (id: string) => void;
 
+  // Scheduling
+  batchScheduleTasks: (assignments: Array<{ taskId: string; scheduledDate: string; scheduledTime: string }>) => void;
+
   // Helpers
   getTasksByProject: (projectId: string) => Task[];
   getTasksByDate: (date: string) => Task[];
@@ -185,6 +188,19 @@ export const useStore = create<Store>()((set, get) => ({
       tasks: s.tasks.map((t) => ({ ...t, tagIds: t.tagIds.filter((tid) => tid !== id) })),
     }));
     syncTag("DELETE", id);
+  },
+
+  batchScheduleTasks: (assignments) => {
+    set((s) => ({
+      tasks: s.tasks.map((t) => {
+        const a = assignments.find((x) => x.taskId === t.id);
+        return a ? { ...t, scheduledDate: a.scheduledDate, scheduledTime: a.scheduledTime, updatedAt: new Date().toISOString() } : t;
+      }),
+    }));
+    for (const a of assignments) {
+      syncTask("PATCH", a.taskId, { scheduledDate: a.scheduledDate, scheduledTime: a.scheduledTime });
+    }
+    toast.success(`${assignments.length} task${assignments.length !== 1 ? "s" : ""} scheduled`);
   },
 
   getTasksByProject: (projectId) => get().tasks.filter((t) => t.projectId === projectId),
