@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
     scheduled_date: task.scheduledDate ?? null,
     scheduled_time: task.scheduledTime ?? null,
     pinned_time: task.pinnedTime ?? false,
+    estimated_minutes: task.estimatedMinutes ?? null,
     completed_at: task.completedAt ?? null,
     created_at: task.createdAt,
     updated_at: task.updatedAt,

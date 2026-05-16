@@ -55,7 +55,7 @@ function getGreeting() {
 }
 
 export default function Dashboard() {
-  const { tasks, projects, getOverdueTasks, isLoaded } = useStore();
+  const { tasks, projects, getOverdueTasks, rescheduleOverdue, isLoaded } = useStore();
   const { data: session } = useSession();
   const [addOpen, setAddOpen] = useState(false);
 
@@ -306,11 +306,22 @@ export default function Dashboard() {
             {/* Overdue */}
             {overdueTasks.length > 0 && (
               <div className="mt-4 space-y-2">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-red-500" />
-                  <h2 className="font-semibold text-red-600 dark:text-red-400">
-                    Overdue ({overdueTasks.length})
-                  </h2>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-red-500" />
+                    <h2 className="font-semibold text-red-600 dark:text-red-400">
+                      Overdue ({overdueTasks.length})
+                    </h2>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs gap-1.5 border-red-200 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30"
+                    onClick={() => rescheduleOverdue()}
+                  >
+                    <CalendarClock className="h-3 w-3" />
+                    Schedule all for today
+                  </Button>
                 </div>
                 {overdueTasks.slice(0, 3).map((task) => (
                   <TaskCard key={task.id} task={task} />

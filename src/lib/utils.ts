@@ -29,7 +29,7 @@ export function isOverdue(dateStr?: string): boolean {
 
 export const PRIORITY_CONFIG: Record<
   Priority,
-  { label: string; color: string; bg: string; border: string; dot: string }
+  { label: string; color: string; bg: string; border: string; dot: string; hex: string }
 > = {
   low: {
     label: "Low",
@@ -37,13 +37,15 @@ export const PRIORITY_CONFIG: Record<
     bg: "bg-slate-100 dark:bg-slate-800",
     border: "border-slate-300 dark:border-slate-600",
     dot: "bg-slate-400",
+    hex: "#94a3b8",
   },
   medium: {
     label: "Medium",
-    color: "text-blue-600 dark:text-blue-400",
-    bg: "bg-blue-50 dark:bg-blue-950",
-    border: "border-blue-300 dark:border-blue-700",
-    dot: "bg-blue-500",
+    color: "text-indigo-600 dark:text-indigo-400",
+    bg: "bg-indigo-50 dark:bg-indigo-950",
+    border: "border-indigo-300 dark:border-indigo-700",
+    dot: "bg-indigo-500",
+    hex: "#6366f1",
   },
   high: {
     label: "High",
@@ -51,6 +53,7 @@ export const PRIORITY_CONFIG: Record<
     bg: "bg-orange-50 dark:bg-orange-950",
     border: "border-orange-300 dark:border-orange-700",
     dot: "bg-orange-500",
+    hex: "#f97316",
   },
   urgent: {
     label: "Urgent",
@@ -58,6 +61,7 @@ export const PRIORITY_CONFIG: Record<
     bg: "bg-red-50 dark:bg-red-950",
     border: "border-red-300 dark:border-red-700",
     dot: "bg-red-500",
+    hex: "#ef4444",
   },
 };
 

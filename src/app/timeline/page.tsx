@@ -11,7 +11,7 @@ import { TaskForm } from "@/components/tasks/task-form";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
+import { cn, PRIORITY_CONFIG } from "@/lib/utils";
 import { autoSchedule } from "@/lib/schedule";
 import type { Task, Priority } from "@/lib/types";
 import {
@@ -23,20 +23,6 @@ import {
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const ROW_H = 64; // px per hour
 const TIME_W = 52; // px for the time-label gutter
-
-const PRIORITY_HEX: Record<Priority, string> = {
-  urgent: "#ef4444",
-  high:   "#f97316",
-  medium: "#6366f1",
-  low:    "#94a3b8",
-};
-
-const PRIORITY_LABEL: Record<Priority, string> = {
-  urgent: "Urgent",
-  high: "High",
-  medium: "Medium",
-  low: "Low",
-};
 
 function fmtHour(h: number): string {
   if (h === 0) return "12 AM";
@@ -121,7 +107,7 @@ function AutoScheduleDialog({
                         >
                           <div
                             className="h-2 w-2 rounded-full shrink-0"
-                            style={{ backgroundColor: PRIORITY_HEX[task.priority] }}
+                            style={{ backgroundColor: PRIORITY_CONFIG[task.priority].hex }}
                           />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{task.title}</p>
@@ -137,9 +123,9 @@ function AutoScheduleDialog({
                             </p>
                             <p
                               className="text-[10px] font-medium"
-                              style={{ color: PRIORITY_HEX[task.priority] }}
+                              style={{ color: PRIORITY_CONFIG[task.priority].hex }}
                             >
-                              {PRIORITY_LABEL[task.priority]}
+                              {PRIORITY_CONFIG[task.priority].label}
                             </p>
                           </div>
                         </div>
@@ -160,7 +146,7 @@ function AutoScheduleDialog({
                       <div key={task.id} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/30">
                         <div
                           className="h-1.5 w-1.5 rounded-full shrink-0"
-                          style={{ backgroundColor: PRIORITY_HEX[task.priority] }}
+                          style={{ backgroundColor: PRIORITY_CONFIG[task.priority].hex }}
                         />
                         <p className="text-xs text-amber-700 dark:text-amber-400 truncate">{task.title}</p>
                       </div>
@@ -508,7 +494,7 @@ export default function TimelinePage() {
                 <div key={dayStr} className="flex-1 border-l p-1 flex flex-col gap-0.5">
                   {allDay.map((t) => {
                     const proj = projects.find((p) => p.id === t.projectId);
-                    const bg = proj?.color ?? PRIORITY_HEX[t.priority];
+                    const bg = proj?.color ?? PRIORITY_CONFIG[t.priority].hex;
                     return (
                       <div
                         key={t.id}
@@ -677,7 +663,7 @@ export default function TimelinePage() {
                           const top = (startMins / 60) * ROW_H;
                           const height = Math.max(ROW_H / 2, (durationMins / 60) * ROW_H) - 3;
                           const proj = projects.find((p) => p.id === task.projectId);
-                          const bg = proj?.color ?? PRIORITY_HEX[task.priority];
+                          const bg = proj?.color ?? PRIORITY_CONFIG[task.priority].hex;
                           const isDone = task.status === "done";
                           const isDragging = draggingId === task.id;
 

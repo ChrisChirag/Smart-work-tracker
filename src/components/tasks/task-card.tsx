@@ -59,12 +59,10 @@ export function TaskCard({ task, compact }: TaskCardProps) {
           compact ? "p-3" : "p-4"
         )}
       >
-        {/* Priority stripe — thicker, full-height, only left corners rounded */}
+        {/* Priority stripe — uses exact priority hex color */}
         <div
-          className={cn(
-            "absolute left-0 top-0 bottom-0 w-1.5 rounded-l-xl rounded-r-none",
-            priority.dot
-          )}
+          className="absolute left-0 top-0 bottom-0 w-1.5 rounded-l-xl rounded-r-none"
+          style={{ backgroundColor: priority.hex }}
         />
 
         <div className="pl-4">
@@ -145,23 +143,19 @@ export function TaskCard({ task, compact }: TaskCardProps) {
                   </span>
                 )}
 
-                {/* Due date */}
+                {/* Due date + overdue badge */}
                 {task.dueDate && (
-                  <span
-                    className={cn(
-                      "inline-flex items-center gap-1 text-xs",
-                      overdue
-                        ? "text-red-500 font-medium"
-                        : "text-muted-foreground"
-                    )}
-                  >
-                    {overdue ? (
+                  overdue ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-red-500 text-white px-2 py-0.5 text-xs font-semibold">
                       <AlertCircle className="h-3 w-3" />
-                    ) : (
+                      Overdue · {formatDate(task.dueDate)}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                       <Calendar className="h-3 w-3" />
-                    )}
-                    {formatDate(task.dueDate)}
-                  </span>
+                      {formatDate(task.dueDate)}
+                    </span>
+                  )
                 )}
 
                 {/* Tags */}

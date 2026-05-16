@@ -18,6 +18,7 @@ import { Tag, Folder, Flag, Plus, X, Trash2, Zap } from "lucide-react";
 import { cn, PROJECT_COLORS } from "@/lib/utils";
 import { DatePicker } from "@/components/ui/date-picker";
 import { TimePicker } from "@/components/ui/time-picker";
+import { DurationPicker } from "@/components/ui/duration-picker";
 
 interface TaskFormProps {
   open: boolean;
@@ -42,6 +43,7 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, de
   const [scheduledTime, setScheduledTime] = useState(editTask?.scheduledTime ?? defaultTime ?? "");
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>(editTask?.tagIds ?? []);
   const [pinnedTime, setPinnedTime] = useState(editTask?.pinnedTime ?? false);
+  const [estimatedMinutes, setEstimatedMinutes] = useState<number | undefined>(editTask?.estimatedMinutes);
 
   // Inline new-project creation
   const [showNewProj, setShowNewProj] = useState(false);
@@ -79,6 +81,7 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, de
       scheduledDate: scheduledDate || undefined,
       scheduledTime: scheduledTime || undefined,
       pinnedTime: !!scheduledTime && pinnedTime,
+      estimatedMinutes: estimatedMinutes,
       completedAt: editTask?.completedAt,
     };
 
@@ -108,6 +111,7 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, de
       setScheduledTime(editTask.scheduledTime ?? "");
       setSelectedTagIds(editTask.tagIds ?? []);
       setPinnedTime(editTask.pinnedTime ?? false);
+      setEstimatedMinutes(editTask.estimatedMinutes);
       setShowNewProj(false);
       setNewProjName("");
     } else {
@@ -121,6 +125,7 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, de
       setScheduledTime(defaultTime ?? "");
       setSelectedTagIds([]);
       setPinnedTime(!!defaultTime);
+      setEstimatedMinutes(undefined);
       setShowNewProj(false);
       setNewProjName("");
     }
@@ -315,14 +320,20 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, de
             </div>
           </div>
 
-          {/* Time */}
-          <div className="space-y-1.5">
-            <Label>Time <span className="text-muted-foreground font-normal text-xs">(optional override)</span></Label>
-            <TimePicker
-              value={scheduledTime}
-              onChange={(v) => { setScheduledTime(v); setPinnedTime(!!v); }}
-              placeholder="Auto-assigned by priority"
-            />
+          {/* Time + Duration */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Time <span className="text-muted-foreground font-normal text-xs">(optional)</span></Label>
+              <TimePicker
+                value={scheduledTime}
+                onChange={(v) => { setScheduledTime(v); setPinnedTime(!!v); }}
+                placeholder="Auto-assigned"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Duration</Label>
+              <DurationPicker value={estimatedMinutes} onChange={setEstimatedMinutes} />
+            </div>
           </div>
 
           {tags.length > 0 && (

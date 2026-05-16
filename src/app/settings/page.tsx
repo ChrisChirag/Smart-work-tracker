@@ -15,7 +15,7 @@ import { TAG_COLORS, cn } from "@/lib/utils";
 import { format } from "date-fns";
 import {
   Sun, Moon, Monitor, Plus, Trash2, Tag, Zap, Shield, RefreshCw,
-  Download, LogOut,
+  Download, LogOut, Clock,
 } from "lucide-react";
 import type { Task, Project } from "@/lib/types";
 
@@ -55,7 +55,7 @@ function exportJSON(tasks: Task[], projects: Project[], tags: { id: string; name
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const { data: session } = useSession();
-  const { tasks, projects, tags, addTag, deleteTag } = useStore();
+  const { tasks, projects, tags, addTag, deleteTag, bufferMinutes, setBufferMinutes } = useStore();
   const [tagOpen, setTagOpen] = useState(false);
   const [tagName, setTagName] = useState("");
   const [tagColor, setTagColor] = useState(TAG_COLORS[0]);
@@ -137,6 +137,41 @@ export default function SettingsPage() {
                   </span>
                 </button>
               ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Scheduler */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Scheduler</CardTitle>
+            <CardDescription>Control how tasks are arranged in your day</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0 space-y-4">
+            <div>
+              <Label className="flex items-center gap-2 mb-3 text-sm font-medium">
+                <Clock className="h-4 w-4" />
+                Buffer time between tasks
+              </Label>
+              <div className="grid grid-cols-4 gap-2">
+                {([0, 5, 10, 15] as const).map((mins) => (
+                  <button
+                    key={mins}
+                    onClick={() => setBufferMinutes(mins)}
+                    className={cn(
+                      "rounded-xl border-2 py-2.5 text-sm font-medium transition-all",
+                      bufferMinutes === mins
+                        ? "border-primary bg-primary/5 text-primary shadow-sm"
+                        : "border-border hover:bg-muted hover:border-border/80 text-muted-foreground"
+                    )}
+                  >
+                    {mins === 0 ? "None" : `${mins} min`}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Gaps inserted between scheduled tasks to allow transitions.
+              </p>
             </div>
           </CardContent>
         </Card>

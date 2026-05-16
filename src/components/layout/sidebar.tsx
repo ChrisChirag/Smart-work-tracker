@@ -8,17 +8,19 @@ import { cn } from "@/lib/utils";
 import { useStore } from "@/store";
 import {
   LayoutDashboard, CheckSquare, FolderKanban,
-  CalendarDays, Settings, Zap, LogOut,
+  CalendarDays, Settings, Zap, LogOut, BarChart2,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { format } from "date-fns";
 
 const NAV = [
   { href: "/", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/tasks", icon: CheckSquare, label: "Tasks" },
   { href: "/projects", icon: FolderKanban, label: "Projects" },
   { href: "/timeline", icon: CalendarDays, label: "Timeline" },
+  { href: "/analytics", icon: BarChart2, label: "Analytics" },
   { href: "/settings", icon: Settings, label: "Settings" },
 ];
 
@@ -27,12 +29,15 @@ export function Sidebar() {
   const { data: session } = useSession();
   const { tasks } = useStore();
 
+  const today = format(new Date(), "yyyy-MM-dd");
   const pendingCount = tasks.filter((t) => t.status !== "done").length;
+  const overdueCount = tasks.filter(
+    (t) => t.dueDate && t.dueDate < today && t.status !== "done"
+  ).length;
   const user = session?.user;
 
   return (
     <aside className="hidden md:flex flex-col w-60 h-screen sticky top-0 border-r bg-card overflow-hidden">
-      {/* Gradient accent line at top */}
       <div className="h-1 w-full bg-gradient-to-r from-indigo-500 to-violet-500 shrink-0" />
 
       {/* Logo */}
@@ -61,18 +66,23 @@ export function Sidebar() {
                   : "text-muted-foreground hover:bg-accent hover:text-foreground"
               )}
             >
-              {/* Active left indicator bar */}
               {active && (
                 <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r-full bg-primary-foreground/60" />
               )}
               <Icon className="h-4 w-4 shrink-0" />
               {label}
+              {/* Overdue badge on Tasks */}
+              {href === "/tasks" && overdueCount > 0 && (
+                <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white px-1">
+                  {overdueCount}
+                </span>
+              )}
             </Link>
           );
         })}
       </nav>
 
-      {/* Quick stats — styled as a mini card with subtle gradient */}
+      {/* Quick stats */}
       <div className="px-3 pb-2">
         <div className="rounded-xl bg-gradient-to-br from-muted/80 to-muted p-3 border border-border/50">
           <p className="text-xs font-semibold text-foreground/70 uppercase tracking-wide mb-2">Quick Stats</p>
@@ -81,10 +91,15 @@ export function Sidebar() {
               { label: "Total", value: tasks.length },
               { label: "Done", value: tasks.filter((t) => t.status === "done").length },
               { label: "Pending", value: pendingCount },
+              ...(overdueCount > 0 ? [{ label: "Overdue", value: overdueCount }] : []),
             ].map(({ label, value }) => (
               <div key={label} className="flex justify-between text-xs">
-                <span className="text-muted-foreground">{label}</span>
-                <span className="font-semibold text-foreground">{value}</span>
+                <span className={cn("text-muted-foreground", label === "Overdue" && "text-red-500")}>
+                  {label}
+                </span>
+                <span className={cn("font-semibold text-foreground", label === "Overdue" && "text-red-500")}>
+                  {value}
+                </span>
               </div>
             ))}
           </div>

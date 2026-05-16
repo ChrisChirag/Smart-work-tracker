@@ -7,6 +7,8 @@ const LUNCH_START = 13 * 60;  // 1:00 PM
 const LUNCH_END   = 14 * 60;  // 2:00 PM
 const AVAIL_MINS  = WORK_END - WORK_START - (LUNCH_END - LUNCH_START); // 480 min
 
+const MIN_SLOT = 15; // 15-min granularity for better precision
+
 const PRIORITY_ORDER: Priority[] = ["urgent", "high", "medium", "low"];
 const PRIORITY_WEIGHT: Record<Priority, number> = { urgent: 4, high: 3, medium: 2, low: 1 };
 
@@ -27,31 +29,28 @@ function minsToTime(mins: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
-// Advance past the lunch window if we've landed in it.
-function skipLunch(mins: number): number {
-  return mins >= LUNCH_START && mins < LUNCH_END ? LUNCH_END : mins;
-}
-
-const MIN_SLOT = 30;
-
 // ─── Primary: fill the whole 9-6 day proportionally ──────────────────────────
 // Pinned tasks (pinnedTime === true) keep their exact scheduledTime.
 // Floating tasks are distributed proportionally in the remaining free slots.
-export function fillDaySchedule(tasks: Task[], date: string): ScheduleAssignment[] {
+// When a task has estimatedMinutes set, that takes precedence over priority weight.
+export function fillDaySchedule(tasks: Task[], date: string, bufferMinutes = 0): ScheduleAssignment[] {
   const active = tasks.filter((t) => t.status !== "done");
   if (active.length === 0) return [];
 
   const pinned   = active.filter((t) => t.pinnedTime && t.scheduledTime);
   const floating = active.filter((t) => !t.pinnedTime || !t.scheduledTime);
 
-  if (floating.length === 0) return []; // everything is pinned, nothing to move
+  if (floating.length === 0) return [];
 
-  // Build occupied-slot set from pinned tasks.
-  // Each pinned task "uses" as many MIN_SLOT blocks as its proportional share of the day.
-  const totalWeight  = active.reduce((s, t) => s + PRIORITY_WEIGHT[t.priority], 0);
-  const getDuration  = (t: Task) =>
+  const totalWeight = active.reduce((s, t) => s + PRIORITY_WEIGHT[t.priority], 0);
+
+  const getProportionalDuration = (t: Task) =>
     Math.max(MIN_SLOT, Math.round((PRIORITY_WEIGHT[t.priority] / totalWeight) * AVAIL_MINS));
 
+  const getDuration = (t: Task) =>
+    t.estimatedMinutes ? Math.max(MIN_SLOT, t.estimatedMinutes) : getProportionalDuration(t);
+
+  // Build occupied-slot set from pinned tasks
   const occupiedMins = new Set<number>();
   for (const t of pinned) {
     const [h, m] = t.scheduledTime!.split(":").map(Number);
@@ -60,7 +59,7 @@ export function fillDaySchedule(tasks: Task[], date: string): ScheduleAssignment
     for (let s = start; s < start + dur; s += MIN_SLOT) occupiedMins.add(s);
   }
 
-  // Build ordered list of free 30-min slots
+  // Build ordered list of free 15-min slots (9 AM-6 PM, skipping lunch and occupied)
   const freeSlots: number[] = [];
   for (let m = WORK_START; m + MIN_SLOT <= WORK_END; m += MIN_SLOT) {
     if (m >= LUNCH_START && m < LUNCH_END) continue;
@@ -68,13 +67,14 @@ export function fillDaySchedule(tasks: Task[], date: string): ScheduleAssignment
     freeSlots.push(m);
   }
 
-  // Sort floating tasks: urgent → high → medium → low
+  // Sort floating tasks: urgent -> high -> medium -> low
   const sorted = [...floating].sort(
     (a, b) => PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority)
   );
 
   const floatWeight = floating.reduce((s, t) => s + PRIORITY_WEIGHT[t.priority], 0);
   const floatMins   = freeSlots.length * MIN_SLOT;
+  const bufferSlots = bufferMinutes > 0 ? Math.ceil(bufferMinutes / MIN_SLOT) : 0;
 
   const assignments: ScheduleAssignment[] = [];
   let slotIdx = 0;
@@ -82,7 +82,10 @@ export function fillDaySchedule(tasks: Task[], date: string): ScheduleAssignment
   for (const task of sorted) {
     if (slotIdx >= freeSlots.length) break;
 
-    const dur       = Math.max(MIN_SLOT, Math.round((PRIORITY_WEIGHT[task.priority] / floatWeight) * floatMins));
+    const dur = task.estimatedMinutes
+      ? Math.max(MIN_SLOT, task.estimatedMinutes)
+      : Math.max(MIN_SLOT, Math.round((PRIORITY_WEIGHT[task.priority] / floatWeight) * floatMins));
+
     const slotsUsed = Math.max(1, Math.round(dur / MIN_SLOT));
 
     assignments.push({
@@ -91,19 +94,18 @@ export function fillDaySchedule(tasks: Task[], date: string): ScheduleAssignment
       scheduledTime: minsToTime(freeSlots[slotIdx]),
     });
 
-    slotIdx += slotsUsed;
+    slotIdx += slotsUsed + bufferSlots;
   }
 
   return assignments;
 }
 
 // ─── Secondary: pick one slot for the auto-schedule preview dialog ────────────
-// Used by the timeline "Auto-schedule" button to find a slot for unscheduled
-// tasks without a fixed day assignment.
 const PRIORITY_START: Record<Priority, number> = {
   urgent: 9 * 60, high: 10 * 60, medium: 14 * 60, low: 16 * 60,
 };
-const PRIORITY_SLOTS: Record<Priority, number> = { urgent: 2, high: 2, medium: 1, low: 1 };
+// Slots each priority takes in the auto-schedule dialog (15-min units)
+const PRIORITY_SLOTS: Record<Priority, number> = { urgent: 4, high: 4, medium: 2, low: 2 };
 const PRIORITY_SCORE: Record<Priority, number>  = { urgent: 1000, high: 100, medium: 10, low: 1 };
 
 function scoreSingle(task: Task, date: string): number {
@@ -119,7 +121,7 @@ function scoreSingle(task: Task, date: string): number {
 
 function buildFreeSlots(occupied: Set<number>): number[] {
   const slots: number[] = [];
-  for (let m = WORK_START; m + 30 <= WORK_END; m += 30) {
+  for (let m = WORK_START; m + MIN_SLOT <= WORK_END; m += MIN_SLOT) {
     if (m >= LUNCH_START && m < LUNCH_END) continue;
     if (!occupied.has(m)) slots.push(m);
   }
@@ -144,13 +146,15 @@ export function autoSchedule(candidates: Task[], alreadyScheduled: Task[], date:
 
   for (const task of sorted) {
     const free = buildFreeSlots(occupied);
-    const needed = PRIORITY_SLOTS[task.priority];
+    const needed = task.estimatedMinutes
+      ? Math.max(1, Math.ceil(task.estimatedMinutes / MIN_SLOT))
+      : PRIORITY_SLOTS[task.priority];
     if (free.length < needed) { unscheduled.push(task); continue; }
 
     const start = closestSlot(PRIORITY_START[task.priority], free);
     if (start === null) { unscheduled.push(task); continue; }
 
-    for (let i = 0; i < needed; i++) occupied.add(start + i * 30);
+    for (let i = 0; i < needed; i++) occupied.add(start + i * MIN_SLOT);
     assignments.push({ taskId: task.id, scheduledDate: date, scheduledTime: minsToTime(start) });
   }
 

@@ -5,13 +5,17 @@ import { toast } from "@/store/toast";
 import { fillDaySchedule } from "@/lib/schedule";
 import type { Task, Project, Tag, TaskStatus } from "@/lib/types";
 
+type BufferMinutes = 0 | 5 | 10 | 15;
+
 interface Store {
   tasks: Task[];
   projects: Project[];
   tags: Tag[];
   isLoaded: boolean;
+  bufferMinutes: BufferMinutes;
 
   setData: (data: { tasks: Task[]; projects: Project[]; tags: Tag[] }) => void;
+  setBufferMinutes: (minutes: BufferMinutes) => void;
 
   // Task actions
   addTask: (task: Omit<Task, "id" | "createdAt" | "updatedAt">) => Task;
@@ -19,6 +23,7 @@ interface Store {
   deleteTask: (id: string) => void;
   toggleTaskStatus: (id: string) => void;
   setTaskStatus: (id: string, status: TaskStatus) => void;
+  rescheduleOverdue: () => void;
 
   // Project actions
   addProject: (project: Omit<Project, "id" | "createdAt">) => Project;
@@ -74,9 +79,13 @@ function syncTag(method: string, id: string, body?: unknown) {
 }
 
 // Apply day rebalance to a task list and fire PATCH syncs. Returns updated task list.
-function applyDayRebalance(tasks: Task[], date: string): { tasks: Task[]; assignments: ScheduleAssignment[] } {
+function applyDayRebalance(
+  tasks: Task[],
+  date: string,
+  bufferMinutes: number = 0
+): { tasks: Task[]; assignments: ScheduleAssignment[] } {
   const dayTasks = tasks.filter((t) => t.scheduledDate === date && t.status !== "done");
-  const assignments = fillDaySchedule(dayTasks, date);
+  const assignments = fillDaySchedule(dayTasks, date, bufferMinutes);
   if (!assignments.length) return { tasks, assignments: [] };
 
   const updated = tasks.map((t) => {
@@ -88,19 +97,71 @@ function applyDayRebalance(tasks: Task[], date: string): { tasks: Task[]; assign
 
 type ScheduleAssignment = { taskId: string; scheduledDate: string; scheduledTime: string };
 
+function getStoredBuffer(): BufferMinutes {
+  if (typeof window === "undefined") return 0;
+  const v = Number(localStorage.getItem("bufferMinutes") ?? "0");
+  return ([0, 5, 10, 15].includes(v) ? v : 0) as BufferMinutes;
+}
+
 export const useStore = create<Store>()((set, get) => ({
   tasks: [],
   projects: [],
   tags: [],
   isLoaded: false,
+  bufferMinutes: getStoredBuffer(),
 
   setData: ({ tasks, projects, tags }) => {
-    set({ tasks, projects, tags, isLoaded: true });
+    const today = format(new Date(), "yyyy-MM-dd");
+    const bufferMins = get().bufferMinutes;
+
+    // Rollover: move past unfinished scheduled tasks to today
+    const rolledOverIds: string[] = [];
+    const withRollover = tasks.map((t) => {
+      if (t.scheduledDate && t.scheduledDate < today && t.status !== "done") {
+        rolledOverIds.push(t.id);
+        return { ...t, scheduledDate: today, scheduledTime: undefined, pinnedTime: false };
+      }
+      return t;
+    });
+
+    // Rebalance today after rollover
+    const { tasks: rebalanced, assignments } = applyDayRebalance(withRollover, today, bufferMins);
+
+    if (rolledOverIds.length > 0) {
+      setTimeout(() => {
+        for (const id of rolledOverIds) {
+          syncTask("PATCH", id, { scheduledDate: today, scheduledTime: undefined, pinnedTime: false });
+        }
+        for (const a of assignments) {
+          syncTask("PATCH", a.taskId, { scheduledDate: a.scheduledDate, scheduledTime: a.scheduledTime });
+        }
+        toast.success(
+          `${rolledOverIds.length} unfinished task${rolledOverIds.length > 1 ? "s" : ""} rolled over to today`
+        );
+      }, 500);
+    }
+
+    set({ tasks: rebalanced, projects, tags, isLoaded: true });
+  },
+
+  setBufferMinutes: (minutes) => {
+    if (typeof window !== "undefined") localStorage.setItem("bufferMinutes", String(minutes));
+    set({ bufferMinutes: minutes });
+    // Rebalance today with new buffer
+    const today = format(new Date(), "yyyy-MM-dd");
+    set((s) => {
+      const { tasks: rebalanced, assignments } = applyDayRebalance(s.tasks, today, minutes);
+      setTimeout(() => {
+        for (const a of assignments) {
+          syncTask("PATCH", a.taskId, { scheduledDate: a.scheduledDate, scheduledTime: a.scheduledTime });
+        }
+      }, 0);
+      return { tasks: rebalanced };
+    });
   },
 
   addTask: (taskData) => {
     const today = format(new Date(), "yyyy-MM-dd");
-    // Always assign a scheduled date — default to today
     const scheduledDate = taskData.scheduledDate ?? today;
 
     const task: Task = {
@@ -113,18 +174,15 @@ export const useStore = create<Store>()((set, get) => ({
       updatedAt: new Date().toISOString(),
     };
 
-    // Add task then rebalance the whole day in one state update
     set((s) => {
       const withNew = [task, ...s.tasks];
-      const { tasks: rebalanced, assignments } = applyDayRebalance(withNew, scheduledDate);
-      // Fire syncs after state settles
+      const { tasks: rebalanced, assignments } = applyDayRebalance(withNew, scheduledDate, s.bufferMinutes);
       setTimeout(() => {
         syncTask("POST", "", task);
         for (const a of assignments) {
           if (a.taskId !== task.id) {
             syncTask("PATCH", a.taskId, { scheduledDate: a.scheduledDate, scheduledTime: a.scheduledTime });
           } else {
-            // For the new task, the POST body will lack the time; send a follow-up PATCH
             syncTask("PATCH", task.id, { scheduledDate: a.scheduledDate, scheduledTime: a.scheduledTime });
           }
         }
@@ -147,7 +205,9 @@ export const useStore = create<Store>()((set, get) => ({
 
       const shouldRebalance =
         "priority" in updates || "scheduledDate" in updates ||
-        "status" in updates || "pinnedTime" in updates || "scheduledTime" in updates;
+        "status" in updates || "pinnedTime" in updates ||
+        "scheduledTime" in updates || "estimatedMinutes" in updates;
+
       if (!shouldRebalance) {
         setTimeout(() => syncTask("PATCH", id, updates), 0);
         return { tasks: updated };
@@ -157,16 +217,15 @@ export const useStore = create<Store>()((set, get) => ({
       const newDate = newTask?.scheduledDate;
 
       let finalTasks = updated;
-      const allAssignments: Array<{ taskId: string; scheduledDate: string; scheduledTime: string }> = [];
+      const allAssignments: ScheduleAssignment[] = [];
 
       if (newDate) {
-        const { tasks: r1, assignments: a1 } = applyDayRebalance(finalTasks, newDate);
+        const { tasks: r1, assignments: a1 } = applyDayRebalance(finalTasks, newDate, s.bufferMinutes);
         finalTasks = r1;
         allAssignments.push(...a1);
       }
-      // When date changed, rebalance the vacated day too
       if (oldDate && oldDate !== newDate) {
-        const { tasks: r2, assignments: a2 } = applyDayRebalance(finalTasks, oldDate);
+        const { tasks: r2, assignments: a2 } = applyDayRebalance(finalTasks, oldDate, s.bufferMinutes);
         finalTasks = r2;
         allAssignments.push(...a2);
       }
@@ -193,7 +252,7 @@ export const useStore = create<Store>()((set, get) => ({
         setTimeout(() => { syncTask("DELETE", id); }, 0);
         return { tasks: without };
       }
-      const { tasks: rebalanced, assignments } = applyDayRebalance(without, date);
+      const { tasks: rebalanced, assignments } = applyDayRebalance(without, date, s.bufferMinutes);
       setTimeout(() => {
         syncTask("DELETE", id);
         for (const a of assignments) {
@@ -216,7 +275,6 @@ export const useStore = create<Store>()((set, get) => ({
       completedAt: next === "done" ? new Date().toISOString() : undefined,
       updatedAt: new Date().toISOString(),
     };
-    // Reuse updateTask so it handles rebalancing (done tasks are excluded from the day)
     get().updateTask(id, updates);
   },
 
@@ -229,6 +287,38 @@ export const useStore = create<Store>()((set, get) => ({
       updatedAt: new Date().toISOString(),
     };
     get().updateTask(id, updates);
+  },
+
+  rescheduleOverdue: () => {
+    const today = format(new Date(), "yyyy-MM-dd");
+    set((s) => {
+      const overdue = s.tasks.filter(
+        (t) => t.dueDate && t.dueDate < today && t.status !== "done"
+      );
+      if (overdue.length === 0) {
+        toast.success("No overdue tasks to reschedule");
+        return s;
+      }
+      const overdueIds = new Set(overdue.map((t) => t.id));
+      const updated = s.tasks.map((t) =>
+        overdueIds.has(t.id)
+          ? { ...t, scheduledDate: today, scheduledTime: undefined, pinnedTime: false, updatedAt: new Date().toISOString() }
+          : t
+      );
+      const { tasks: rebalanced, assignments } = applyDayRebalance(updated, today, s.bufferMinutes);
+      setTimeout(() => {
+        for (const t of overdue) {
+          syncTask("PATCH", t.id, { scheduledDate: today, scheduledTime: undefined, pinnedTime: false });
+        }
+        for (const a of assignments) {
+          if (!overdueIds.has(a.taskId)) {
+            syncTask("PATCH", a.taskId, { scheduledDate: a.scheduledDate, scheduledTime: a.scheduledTime });
+          }
+        }
+        toast.success(`${overdue.length} overdue task${overdue.length > 1 ? "s" : ""} scheduled for today`);
+      }, 0);
+      return { tasks: rebalanced };
+    });
   },
 
   addProject: (projectData) => {

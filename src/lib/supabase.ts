@@ -31,6 +31,7 @@ export function rowToTask(row: Record<string, unknown>) {
     scheduledDate: row.scheduled_date as string | undefined,
     scheduledTime: row.scheduled_time as string | undefined,
     pinnedTime: (row.pinned_time as boolean) ?? false,
+    estimatedMinutes: row.estimated_minutes as number | undefined,
     completedAt: row.completed_at as string | undefined,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,

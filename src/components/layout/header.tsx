@@ -1,15 +1,16 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
-import { Sun, Moon, Monitor, Plus } from "lucide-react";
+import { Sun, Moon, Monitor, Plus, Search } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useState } from "react";
 import { TaskForm } from "@/components/tasks/task-form";
+import { CommandPalette } from "@/components/search/command-palette";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 interface HeaderProps {
   title: string;
@@ -19,8 +20,21 @@ interface HeaderProps {
 export function Header({ title, subtitle }: HeaderProps) {
   const { theme, setTheme } = useTheme();
   const [addOpen, setAddOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const ThemeIcon = theme === "dark" ? Moon : theme === "light" ? Sun : Monitor;
+
+  // Global Cmd+K / Ctrl+K shortcut
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   return (
     <>
@@ -32,6 +46,20 @@ export function Header({ title, subtitle }: HeaderProps) {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Search trigger */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 h-8 text-muted-foreground hover:text-foreground"
+              onClick={() => setSearchOpen(true)}
+            >
+              <Search className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline text-xs">Search</span>
+              <kbd className="hidden sm:inline-flex h-4 select-none items-center rounded border bg-muted px-1 font-mono text-[10px] font-medium">
+                ⌘K
+              </kbd>
+            </Button>
+
             {/* Theme toggle */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -52,7 +80,7 @@ export function Header({ title, subtitle }: HeaderProps) {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Quick add task — gradient background for prominence */}
+            {/* Quick add task */}
             <Button
               size="sm"
               onClick={() => setAddOpen(true)}
@@ -63,7 +91,6 @@ export function Header({ title, subtitle }: HeaderProps) {
             </Button>
           </div>
         </div>
-        {/* Subtle gradient bottom border */}
         <div className="h-px w-full bg-gradient-to-r from-transparent via-border to-transparent" />
       </header>
 
@@ -72,6 +99,8 @@ export function Header({ title, subtitle }: HeaderProps) {
         onClose={() => setAddOpen(false)}
         defaultDate={format(new Date(), "yyyy-MM-dd")}
       />
+
+      <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
     </>
   );
 }
