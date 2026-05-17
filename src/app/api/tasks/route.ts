@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     status: task.status,
     priority: task.priority,
     project_id: task.projectId ?? null,
-    tag_ids: task.tagIds,
+    tag_ids: task.tagIds ?? [],
     due_date: task.dueDate ?? null,
     scheduled_date: task.scheduledDate ?? null,
     scheduled_time: task.scheduledTime ?? null,
