@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
   const uid = session.user.email;
 
   const task: Task = await req.json();
-  const { data, error } = await db.from("tasks").insert({
+  const row = {
     id: task.id,
     user_id: uid,
     title: task.title,
@@ -27,8 +27,16 @@ export async function POST(req: NextRequest) {
     completed_at: task.completedAt ?? null,
     created_at: task.createdAt,
     updated_at: task.updatedAt,
-  }).select().single();
+  };
+
+  // Use upsert so that re-sync calls (local-only tasks being re-posted on load)
+  // never collide with rows that already exist, avoiding spurious error toasts.
+  const { data, error } = await db.from("tasks")
+    .upsert(row, { onConflict: "id", ignoreDuplicates: false })
+    .select()
+    .maybeSingle();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data) return NextResponse.json({ ok: true }); // row existed, no-op
   return NextResponse.json(rowToTask(data));
 }

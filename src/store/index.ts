@@ -141,12 +141,25 @@ export const useStore = create<Store>()(
         const serverProjectIds = new Set(serverProjects.map((p) => p.id));
         const serverTagIds = new Set(serverTags.map((t) => t.id));
 
+        // Build lookup maps for fast access to local versions
+        const localTaskMap = new Map(currentTasks.map((t) => [t.id, t]));
+        const localProjectMap = new Map(currentProjects.map((p) => [p.id, p]));
+
+        // For items that exist in both local and server, keep whichever has the
+        // newer updatedAt timestamp. This prevents a page-refresh from overwriting
+        // unsaved local edits when the PATCH hasn't reached Supabase yet.
         const allTasks = [
-          ...serverTasks,
+          ...serverTasks.map((st) => {
+            const local = localTaskMap.get(st.id);
+            return local && local.updatedAt > st.updatedAt ? local : st;
+          }),
           ...currentTasks.filter((t) => !serverTaskIds.has(t.id)),
         ];
         const allProjects = [
-          ...serverProjects,
+          ...serverProjects.map((sp) => {
+            const local = localProjectMap.get(sp.id);
+            return local && local.name !== sp.name ? local : sp;
+          }),
           ...currentProjects.filter((p) => !serverProjectIds.has(p.id)),
         ];
         const allTags = [

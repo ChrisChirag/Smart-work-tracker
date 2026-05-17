@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
   const uid = session.user.email;
 
   const project: Project = await req.json();
-  const { data, error } = await db.from("projects").insert({
+  const row = {
     id: project.id,
     user_id: uid,
     name: project.name,
@@ -18,8 +18,15 @@ export async function POST(req: NextRequest) {
     color: project.color,
     emoji: "",
     created_at: project.createdAt,
-  }).select().single();
+  };
+
+  // Upsert so re-sync on load never produces "duplicate key" error toasts.
+  const { data, error } = await db.from("projects")
+    .upsert(row, { onConflict: "id", ignoreDuplicates: false })
+    .select()
+    .maybeSingle();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data) return NextResponse.json({ ok: true });
   return NextResponse.json(rowToProject(data));
 }
