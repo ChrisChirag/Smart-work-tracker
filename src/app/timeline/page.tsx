@@ -533,13 +533,11 @@ export default function TimelinePage() {
                   <div
                     key={h}
                     className="absolute w-full flex items-start justify-end pr-2"
-                    style={{ top: h * ROW_H, height: ROW_H }}
+                    style={{ top: (h - START_HOUR) * ROW_H, height: ROW_H }}
                   >
-                    {h > 0 && (
-                      <span className="text-[10px] text-muted-foreground -translate-y-2 whitespace-nowrap">
-                        {fmtHour(h)}
-                      </span>
-                    )}
+                    <span className="text-[10px] text-muted-foreground -translate-y-2 whitespace-nowrap">
+                      {fmtHour(h)}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -552,7 +550,7 @@ export default function TimelinePage() {
                   <div
                     key={h}
                     className="absolute left-0 right-0 border-t border-border/50"
-                    style={{ top: h * ROW_H }}
+                    style={{ top: (h - START_HOUR) * ROW_H }}
                   />
                 ))}
 
@@ -561,7 +559,7 @@ export default function TimelinePage() {
                   <div
                     key={`h${h}`}
                     className="absolute left-0 right-0 border-t border-border/20 border-dashed"
-                    style={{ top: h * ROW_H + ROW_H / 2 }}
+                    style={{ top: (h - START_HOUR) * ROW_H + ROW_H / 2 }}
                   />
                 ))}
 
@@ -597,7 +595,7 @@ export default function TimelinePage() {
                           style={{
                             left: `${leftPct}%`,
                             width: `${widthPct}%`,
-                            top: h * ROW_H,
+                            top: (h - START_HOUR) * ROW_H,
                             height: ROW_H,
                           }}
                           onDoubleClick={() => handleSlotDblClick(day, h)}
