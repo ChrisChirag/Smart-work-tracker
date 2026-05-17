@@ -46,6 +46,10 @@ interface Store {
   getOverdueTasks: () => Task[];
 }
 
+// Tracks in-flight project POSTs so addTask can await them before inserting,
+// preventing the FK violation "tasks_project_id_fkey".
+const pendingProjectSyncs = new Map<string, Promise<void>>();
+
 async function readError(res: Response, label: string): Promise<string> {
   try {
     const body = await res.json() as { error?: string };
@@ -150,6 +154,12 @@ export const useStore = create<Store>()(
           ...currentTags.filter((t) => !serverTagIds.has(t.id)),
         ];
 
+        // Items in localStorage that the server has never seen — need to be POSTed.
+        const localOnlyProjects = allProjects.filter((p) => !serverProjectIds.has(p.id));
+        const localOnlyTaskIds = new Set(
+          currentTasks.filter((t) => !serverTaskIds.has(t.id)).map((t) => t.id)
+        );
+
         // Rollover: move past unfinished scheduled tasks to today
         const rolledOverIds: string[] = [];
         const withRollover = allTasks.map((t) => {
@@ -162,6 +172,20 @@ export const useStore = create<Store>()(
 
         // Rebalance today after rollover
         const { tasks: rebalanced, assignments } = applyDayRebalance(withRollover, today, bufferMins);
+
+        // Re-sync local-only items to Supabase. Projects must be inserted before tasks
+        // to satisfy the FK constraint (tasks_project_id_fkey).
+        const localOnlyTasksToSync = rebalanced.filter((t) => localOnlyTaskIds.has(t.id));
+        if (localOnlyProjects.length > 0 || localOnlyTasksToSync.length > 0) {
+          setTimeout(async () => {
+            if (localOnlyProjects.length > 0) {
+              await Promise.all(localOnlyProjects.map((p) => syncProject("POST", "", p)));
+            }
+            for (const t of localOnlyTasksToSync) {
+              await syncTask("POST", "", t);
+            }
+          }, 600);
+        }
 
         if (rolledOverIds.length > 0) {
           setTimeout(() => {
@@ -212,7 +236,13 @@ export const useStore = create<Store>()(
         set((s) => {
           const withNew = [task, ...s.tasks];
           const { tasks: rebalanced, assignments } = applyDayRebalance(withNew, scheduledDate, s.bufferMinutes);
-          setTimeout(() => {
+          setTimeout(async () => {
+            // If the task references a project that was just created, wait for
+            // that project's INSERT to complete first to avoid the FK violation.
+            if (task.projectId) {
+              const pending = pendingProjectSyncs.get(task.projectId);
+              if (pending) await pending;
+            }
             // Merge the rebalanced scheduled time into the POST body so no separate PATCH is needed,
             // avoiding a race condition where the PATCH arrives at Supabase before the INSERT completes.
             const ownAssignment = assignments.find((a) => a.taskId === task.id);
@@ -366,9 +396,13 @@ export const useStore = create<Store>()(
           id: generateId(),
           createdAt: new Date().toISOString(),
         };
-        toast.success("Project created");
         set((s) => ({ projects: [project, ...s.projects] }));
-        syncProject("POST", "", project);
+        // Register the promise so addTask can await it before linking this project.
+        const syncPromise = syncProject("POST", "", project).finally(() => {
+          pendingProjectSyncs.delete(project.id);
+        });
+        pendingProjectSyncs.set(project.id, syncPromise);
+        toast.success("Project created");
         return project;
       },
 
