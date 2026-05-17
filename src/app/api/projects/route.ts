@@ -16,6 +16,7 @@ export async function POST(req: NextRequest) {
     name: project.name,
     description: project.description ?? null,
     color: project.color,
+    emoji: "",
     created_at: project.createdAt,
   }).select().single();
 
