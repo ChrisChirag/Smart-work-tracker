@@ -50,8 +50,10 @@ function syncTask(method: string, id: string, body?: unknown) {
     method,
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
+  }).then((res) => {
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
   }).catch((err) => {
-    console.error(err);
+    console.error("[syncTask]", method, id || "(new)", err);
     toast.error("Sync failed — your data may not have saved");
   });
 }
@@ -61,8 +63,10 @@ function syncProject(method: string, id: string, body?: unknown) {
     method,
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
+  }).then((res) => {
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
   }).catch((err) => {
-    console.error(err);
+    console.error("[syncProject]", method, id || "(new)", err);
     toast.error("Sync failed — your data may not have saved");
   });
 }
@@ -72,8 +76,10 @@ function syncTag(method: string, id: string, body?: unknown) {
     method,
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
+  }).then((res) => {
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
   }).catch((err) => {
-    console.error(err);
+    console.error("[syncTag]", method, id || "(new)", err);
     toast.error("Sync failed — your data may not have saved");
   });
 }
@@ -178,12 +184,16 @@ export const useStore = create<Store>()((set, get) => ({
       const withNew = [task, ...s.tasks];
       const { tasks: rebalanced, assignments } = applyDayRebalance(withNew, scheduledDate, s.bufferMinutes);
       setTimeout(() => {
-        syncTask("POST", "", task);
+        // Merge the rebalanced scheduled time into the POST body so no separate PATCH is needed,
+        // avoiding a race condition where the PATCH arrives at Supabase before the INSERT completes.
+        const ownAssignment = assignments.find((a) => a.taskId === task.id);
+        const taskToPost = ownAssignment
+          ? { ...task, scheduledDate: ownAssignment.scheduledDate, scheduledTime: ownAssignment.scheduledTime }
+          : task;
+        syncTask("POST", "", taskToPost);
         for (const a of assignments) {
           if (a.taskId !== task.id) {
             syncTask("PATCH", a.taskId, { scheduledDate: a.scheduledDate, scheduledTime: a.scheduledTime });
-          } else {
-            syncTask("PATCH", task.id, { scheduledDate: a.scheduledDate, scheduledTime: a.scheduledTime });
           }
         }
       }, 0);
