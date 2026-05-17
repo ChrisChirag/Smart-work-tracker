@@ -15,7 +15,7 @@ import { cn, PRIORITY_CONFIG } from "@/lib/utils";
 import { autoSchedule } from "@/lib/schedule";
 import type { Task, Priority } from "@/lib/types";
 import {
-  ChevronLeft, ChevronRight, CalendarDays, LayoutList, Zap, AlertCircle,
+  ChevronLeft, ChevronRight, CalendarDays, CalendarRange, LayoutList, Zap, AlertCircle,
   Copy, ArrowRight, Pin,
 } from "lucide-react";
 
@@ -31,7 +31,7 @@ function fmtHour(h: number): string {
   return `${h - 12} PM`;
 }
 
-type ViewMode = "day" | "week";
+type ViewMode = "day" | "week" | "work-week";
 
 // ─── Auto-schedule preview dialog ────────────────────────────────────────────
 function AutoScheduleDialog({
@@ -315,7 +315,12 @@ export default function TimelinePage() {
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
   const weekEnd = endOfWeek(selectedDate, { weekStartsOn: 1 });
   const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
-  const displayDays = viewMode === "week" ? weekDays : [selectedDate];
+  // Work week = Mon–Fri only (getDay: Mon=1 … Fri=5)
+  const workWeekDays = weekDays.filter((d) => d.getDay() >= 1 && d.getDay() <= 5);
+  const displayDays =
+    viewMode === "week" ? weekDays :
+    viewMode === "work-week" ? workWeekDays :
+    [selectedDate];
 
   const getTasksForDay = (dateStr: string) =>
     tasks.filter((t) => t.scheduledDate === dateStr);
@@ -376,9 +381,12 @@ export default function TimelinePage() {
   }
 
   // ─── Render ──────────────────────────────────────────────────────────────────
-  const subtitleText = viewMode === "day"
-    ? format(selectedDate, "EEEE, MMMM d, yyyy")
-    : `${format(weekStart, "MMM d")} – ${format(weekEnd, "MMM d, yyyy")}`;
+  const subtitleText =
+    viewMode === "day"
+      ? format(selectedDate, "EEEE, MMMM d, yyyy")
+      : viewMode === "work-week"
+        ? `${format(workWeekDays[0], "MMM d")} – ${format(workWeekDays[4], "MMM d, yyyy")} (Mon–Fri)`
+        : `${format(weekStart, "MMM d")} – ${format(weekEnd, "MMM d, yyyy")}`;
 
   const showNowLine = displayDays.some((d) => isToday(d));
 
@@ -423,6 +431,7 @@ export default function TimelinePage() {
             <div className="flex rounded-lg border p-0.5">
               {([
                 { mode: "day" as ViewMode, icon: LayoutList, label: "Day" },
+                { mode: "work-week" as ViewMode, icon: CalendarRange, label: "Work Week" },
                 { mode: "week" as ViewMode, icon: CalendarDays, label: "Week" },
               ] as const).map(({ mode, icon: Icon, label }) => (
                 <button
