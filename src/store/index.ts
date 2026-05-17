@@ -46,6 +46,10 @@ interface Store {
   getOverdueTasks: () => Task[];
 }
 
+// Tracks in-flight project POSTs so addTask can await them before inserting,
+// preventing the FK violation "tasks_project_id_fkey".
+const pendingProjectSyncs = new Map<string, Promise<void>>();
+
 async function readError(res: Response, label: string): Promise<string> {
   try {
     const body = await res.json() as { error?: string };
@@ -212,7 +216,13 @@ export const useStore = create<Store>()(
         set((s) => {
           const withNew = [task, ...s.tasks];
           const { tasks: rebalanced, assignments } = applyDayRebalance(withNew, scheduledDate, s.bufferMinutes);
-          setTimeout(() => {
+          setTimeout(async () => {
+            // If the task references a project that was just created, wait for
+            // that project's INSERT to complete first to avoid the FK violation.
+            if (task.projectId) {
+              const pending = pendingProjectSyncs.get(task.projectId);
+              if (pending) await pending;
+            }
             // Merge the rebalanced scheduled time into the POST body so no separate PATCH is needed,
             // avoiding a race condition where the PATCH arrives at Supabase before the INSERT completes.
             const ownAssignment = assignments.find((a) => a.taskId === task.id);
@@ -366,9 +376,13 @@ export const useStore = create<Store>()(
           id: generateId(),
           createdAt: new Date().toISOString(),
         };
-        toast.success("Project created");
         set((s) => ({ projects: [project, ...s.projects] }));
-        syncProject("POST", "", project);
+        // Register the promise so addTask can await it before linking this project.
+        const syncPromise = syncProject("POST", "", project).finally(() => {
+          pendingProjectSyncs.delete(project.id);
+        });
+        pendingProjectSyncs.set(project.id, syncPromise);
+        toast.success("Project created");
         return project;
       },
 

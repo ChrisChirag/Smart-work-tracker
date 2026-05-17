@@ -50,31 +50,22 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, de
   const [newProjName, setNewProjName] = useState("");
   const [newProjColor, setNewProjColor] = useState(PROJECT_COLORS[0]);
 
-  const handleCreateProject = () => {
-    if (!newProjName.trim()) return;
-    const proj = addProject({ name: newProjName.trim(), description: "", color: newProjColor });
-    setProjectId(proj.id);
-    setShowNewProj(false);
-    setNewProjName("");
-    setNewProjColor(PROJECT_COLORS[0]);
-  };
-
   const toggleTag = (tagId: string) => {
     setSelectedTagIds((prev) =>
       prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
     );
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  // Core submit logic — accepts an optional projectId override for the case where
+  // a new project was just created and React state hasn't flushed yet.
+  const submitTask = (overrideProjId?: string) => {
     if (!title.trim()) return;
-
     const taskData = {
       title: title.trim(),
       description: description.trim() || undefined,
       status,
       priority,
-      projectId: projectId || undefined,
+      projectId: (overrideProjId !== undefined ? overrideProjId : projectId) || undefined,
       tagIds: selectedTagIds,
       dueDate: dueDate || undefined,
       // Pass what the user explicitly chose; the store handles auto-scheduling
@@ -84,13 +75,31 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, de
       estimatedMinutes: estimatedMinutes,
       completedAt: editTask?.completedAt,
     };
-
     if (editTask) {
       updateTask(editTask.id, taskData);
     } else {
       addTask(taskData);
     }
     onClose();
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    submitTask();
+  };
+
+  const handleCreateProject = () => {
+    if (!newProjName.trim()) return;
+    const proj = addProject({ name: newProjName.trim(), description: "", color: newProjColor });
+    setProjectId(proj.id);
+    setShowNewProj(false);
+    setNewProjName("");
+    setNewProjColor(PROJECT_COLORS[0]);
+    // If the task title is already filled, save the task immediately so the
+    // user doesn't have to click "Add Task" separately after creating the project.
+    if (title.trim()) {
+      submitTask(proj.id);
+    }
   };
 
   React.useEffect(() => {
@@ -294,7 +303,7 @@ export function TaskForm({ open, onClose, editTask, defaultDate, defaultTime, de
                     disabled={!newProjName.trim()}
                     onClick={handleCreateProject}
                   >
-                    Create &amp; Select
+                    {title.trim() ? "Create Project & Save Task" : "Create & Select"}
                   </Button>
                 </div>
               </div>
