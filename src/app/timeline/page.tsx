@@ -20,7 +20,9 @@ import {
 } from "lucide-react";
 
 // ─── Layout constants ────────────────────────────────────────────────────────
-const HOURS = Array.from({ length: 24 }, (_, i) => i);
+const START_HOUR = 9;  // 9 AM
+const END_HOUR = 18;   // 6 PM (exclusive end — last visible slot is 17:xx)
+const HOURS = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => i + START_HOUR);
 const ROW_H = 64; // px per hour
 const TIME_W = 52; // px for the time-label gutter
 
@@ -281,27 +283,24 @@ export default function TimelinePage() {
   const [pendingDrop, setPendingDrop] = useState<{ task: Task; fromDate: string; toDate: string } | null>(null);
   const dragFromDate = useRef<string>("");
 
-  // Current time indicator — updates every minute
-  const [nowTop, setNowTop] = useState(() => {
+  // Current time indicator — updates every minute, offset from START_HOUR
+  const calcNowTop = () => {
     const d = new Date();
-    return ((d.getHours() * 60 + d.getMinutes()) / 60) * ROW_H;
-  });
+    const mins = d.getHours() * 60 + d.getMinutes();
+    return ((mins - START_HOUR * 60) / 60) * ROW_H;
+  };
+  const [nowTop, setNowTop] = useState(calcNowTop);
 
   useEffect(() => {
-    const tick = () => {
-      const d = new Date();
-      setNowTop(((d.getHours() * 60 + d.getMinutes()) / 60) * ROW_H);
-    };
-    const id = setInterval(tick, 60_000);
+    const id = setInterval(() => setNowTop(calcNowTop()), 60_000);
     return () => clearInterval(id);
   }, []);
 
-  // Scroll to ~1 hr before now on mount / view switch
+  // Scroll to top (9 AM) on mount / view switch
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (scrollRef.current && isLoaded) {
-      const d = new Date();
-      scrollRef.current.scrollTop = Math.max(0, (d.getHours() - 1) * ROW_H);
+      scrollRef.current.scrollTop = 0;
     }
   }, [isLoaded, viewMode]);
 
@@ -388,7 +387,11 @@ export default function TimelinePage() {
         ? `${format(workWeekDays[0], "MMM d")} – ${format(workWeekDays[4], "MMM d, yyyy")} (Mon–Fri)`
         : `${format(weekStart, "MMM d")} – ${format(weekEnd, "MMM d, yyyy")}`;
 
-  const showNowLine = displayDays.some((d) => isToday(d));
+  const currentHour = new Date().getHours();
+  const showNowLine =
+    displayDays.some((d) => isToday(d)) &&
+    currentHour >= START_HOUR &&
+    currentHour < END_HOUR;
 
   return (
     <>
@@ -520,9 +523,9 @@ export default function TimelinePage() {
             })}
           </div>
 
-          {/* ── Scrollable hourly grid ── */}
+          {/* ── Scrollable hourly grid (9 AM – 6 PM) ── */}
           <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
-            <div className="flex" style={{ height: 24 * ROW_H }}>
+            <div className="flex" style={{ height: HOURS.length * ROW_H }}>
 
               {/* Time gutter */}
               <div className="shrink-0 relative select-none" style={{ width: TIME_W }}>
@@ -638,7 +641,7 @@ export default function TimelinePage() {
                         style={{
                           left: `${leftPct}%`,
                           width: `${widthPct}%`,
-                          top: 13 * ROW_H,
+                          top: (13 - START_HOUR) * ROW_H,
                           height: ROW_H,
                           background: "repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(128,128,128,0.06) 4px, rgba(128,128,128,0.06) 8px)",
                         }}
@@ -662,17 +665,24 @@ export default function TimelinePage() {
                           const [h, m] = (t.scheduledTime ?? "0:0").split(":").map(Number);
                           return h * 60 + m;
                         };
-                        const sorted = [...timedTasks].sort((a, b) => toMins(a) - toMins(b));
-                        const WORK_END_MINS = 18 * 60;
+                        // Only render tasks within the visible 9am–6pm window
+                        const visibleTasks = timedTasks.filter((t) => {
+                          const m = toMins(t);
+                          return m >= START_HOUR * 60 && m < END_HOUR * 60;
+                        });
+                        const sorted = [...visibleTasks].sort((a, b) => toMins(a) - toMins(b));
+                        const WORK_END_MINS = END_HOUR * 60;
 
                         return sorted.map((task, idx) => {
                           const startMins = toMins(task);
                           const nextMins = idx < sorted.length - 1 ? toMins(sorted[idx + 1]) : WORK_END_MINS;
                           const durationMins = Math.max(30, nextMins - startMins);
-                          const top = (startMins / 60) * ROW_H;
+                          // Offset top from START_HOUR
+                          const top = ((startMins - START_HOUR * 60) / 60) * ROW_H;
                           const height = Math.max(ROW_H / 2, (durationMins / 60) * ROW_H) - 3;
                           const proj = projects.find((p) => p.id === task.projectId);
-                          const bg = proj?.color ?? PRIORITY_CONFIG[task.priority].hex;
+                          // Always use priority colour; project shown as dot + name in subtitle
+                          const bg = PRIORITY_CONFIG[task.priority].hex;
                           const isDone = task.status === "done";
                           const isDragging = draggingId === task.id;
 
@@ -710,8 +720,17 @@ export default function TimelinePage() {
                                 )}
                               </p>
                               {durationMins >= 45 && (
-                                <p className="text-[10px] opacity-75 mt-0.5">
-                                  {task.scheduledTime}{proj && ` · ${proj.name}`}
+                                <p className="text-[10px] opacity-75 mt-0.5 flex items-center gap-1.5">
+                                  {task.scheduledTime}
+                                  {proj && (
+                                    <>
+                                      <span
+                                        className="h-1.5 w-1.5 rounded-full shrink-0 inline-block opacity-90"
+                                        style={{ backgroundColor: proj.color }}
+                                      />
+                                      {proj.name}
+                                    </>
+                                  )}
                                 </p>
                               )}
                             </div>
