@@ -7,7 +7,7 @@ import {
 import { Clock } from "lucide-react";
 
 const DURATION_OPTIONS = [
-  { label: "Auto (by priority)", value: "" },
+  { label: "Auto (by priority)", value: "auto" },
   { label: "15 min", value: "15" },
   { label: "30 min", value: "30" },
   { label: "45 min", value: "45" },
@@ -26,8 +26,8 @@ interface DurationPickerProps {
 export function DurationPicker({ value, onChange }: DurationPickerProps) {
   return (
     <Select
-      value={value != null ? String(value) : ""}
-      onValueChange={(v) => onChange(v === "" ? undefined : Number(v))}
+      value={value != null ? String(value) : "auto"}
+      onValueChange={(v) => onChange(v === "auto" ? undefined : Number(v))}
     >
       <SelectTrigger className="gap-2">
         <Clock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
