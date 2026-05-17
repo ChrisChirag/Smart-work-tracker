@@ -46,16 +46,25 @@ interface Store {
   getOverdueTasks: () => Task[];
 }
 
+async function readError(res: Response, label: string): Promise<string> {
+  try {
+    const body = await res.json() as { error?: string };
+    return body.error ?? `HTTP ${res.status}`;
+  } catch {
+    return `HTTP ${res.status}`;
+  }
+}
+
 function syncTask(method: string, id: string, body?: unknown) {
   return fetch(`/api/tasks${id ? `/${id}` : ""}`, {
     method,
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
-  }).then((res) => {
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  }).catch((err) => {
-    console.error("[syncTask]", method, id || "(new)", err);
-    toast.error("Sync failed — your data may not have saved");
+  }).then(async (res) => {
+    if (!res.ok) throw new Error(await readError(res, "task"));
+  }).catch((err: Error) => {
+    console.error("[syncTask]", method, id || "(new)", err.message);
+    toast.error(`Save failed: ${err.message}`);
   });
 }
 
@@ -64,11 +73,11 @@ function syncProject(method: string, id: string, body?: unknown) {
     method,
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
-  }).then((res) => {
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  }).catch((err) => {
-    console.error("[syncProject]", method, id || "(new)", err);
-    toast.error("Sync failed — your data may not have saved");
+  }).then(async (res) => {
+    if (!res.ok) throw new Error(await readError(res, "project"));
+  }).catch((err: Error) => {
+    console.error("[syncProject]", method, id || "(new)", err.message);
+    toast.error(`Save failed: ${err.message}`);
   });
 }
 
@@ -77,11 +86,11 @@ function syncTag(method: string, id: string, body?: unknown) {
     method,
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
-  }).then((res) => {
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  }).catch((err) => {
-    console.error("[syncTag]", method, id || "(new)", err);
-    toast.error("Sync failed — your data may not have saved");
+  }).then(async (res) => {
+    if (!res.ok) throw new Error(await readError(res, "tag"));
+  }).catch((err: Error) => {
+    console.error("[syncTag]", method, id || "(new)", err.message);
+    toast.error(`Save failed: ${err.message}`);
   });
 }
 
