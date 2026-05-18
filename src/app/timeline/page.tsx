@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import {
   format, addDays, isToday, isSameDay,
   startOfWeek, endOfWeek, eachDayOfInterval,
@@ -16,7 +16,7 @@ import { autoSchedule } from "@/lib/schedule";
 import type { Task, Priority } from "@/lib/types";
 import {
   ChevronLeft, ChevronRight, CalendarDays, CalendarRange, LayoutList, Zap, AlertCircle,
-  Copy, ArrowRight, Pin,
+  Copy, ArrowRight, Pin, CheckSquare,
 } from "lucide-react";
 
 // ─── Layout constants ────────────────────────────────────────────────────────
@@ -179,37 +179,42 @@ function AutoScheduleDialog({
   );
 }
 
-// ─── Move / Duplicate dialog ─────────────────────────────────────────────────
+// ─── Move / Duplicate dialog — supports single or multiple tasks ──────────────
 function MoveOrDuplicateDialog({
-  task,
+  tasks,
   fromDate,
   toDate,
   onClose,
 }: {
-  task: Task;
+  tasks: Task[];
   fromDate: string;
   toDate: string;
   onClose: () => void;
 }) {
   const { updateTask, addTask } = useStore();
+  const count = tasks.length;
 
   const handleMove = () => {
-    updateTask(task.id, { scheduledDate: toDate, scheduledTime: undefined });
+    tasks.forEach((task) => {
+      updateTask(task.id, { scheduledDate: toDate, scheduledTime: undefined });
+    });
     onClose();
   };
 
   const handleDuplicate = () => {
-    addTask({
-      title: task.title,
-      description: task.description,
-      status: "todo",
-      priority: task.priority,
-      projectId: task.projectId,
-      tagIds: task.tagIds,
-      dueDate: task.dueDate,
-      scheduledDate: toDate,
-      scheduledTime: undefined,
-      completedAt: undefined,
+    tasks.forEach((task) => {
+      addTask({
+        title: task.title,
+        description: task.description,
+        status: "todo",
+        priority: task.priority,
+        projectId: task.projectId,
+        tagIds: task.tagIds,
+        dueDate: task.dueDate,
+        scheduledDate: toDate,
+        scheduledTime: undefined,
+        completedAt: undefined,
+      });
     });
     onClose();
   };
@@ -223,13 +228,29 @@ function MoveOrDuplicateDialog({
         <div className="h-1 w-full bg-gradient-to-r from-indigo-500 to-violet-500" />
         <div className="px-5 pt-5 pb-1">
           <DialogHeader>
-            <DialogTitle className="text-base">Move or duplicate task?</DialogTitle>
+            <DialogTitle className="text-base">
+              {count === 1 ? "Move or duplicate task?" : `Move or duplicate ${count} tasks?`}
+            </DialogTitle>
           </DialogHeader>
         </div>
         <div className="px-5 pb-2 space-y-3">
-          <p className="text-sm text-muted-foreground leading-snug line-clamp-2">
-            <span className="font-medium text-foreground">{task.title}</span>
-          </p>
+          {count === 1 ? (
+            <p className="text-sm text-muted-foreground leading-snug line-clamp-2">
+              <span className="font-medium text-foreground">{tasks[0].title}</span>
+            </p>
+          ) : (
+            <div className="space-y-1 max-h-36 overflow-y-auto">
+              {tasks.map((t) => (
+                <div key={t.id} className="flex items-center gap-2">
+                  <div
+                    className="h-1.5 w-1.5 rounded-full shrink-0"
+                    style={{ backgroundColor: PRIORITY_CONFIG[t.priority].hex }}
+                  />
+                  <p className="text-sm text-foreground truncate font-medium">{t.title}</p>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span className="rounded-md bg-muted px-2 py-1">{fromLabel}</span>
             <ArrowRight className="h-3.5 w-3.5 shrink-0" />
@@ -245,7 +266,7 @@ function MoveOrDuplicateDialog({
             onClick={handleDuplicate}
           >
             <Copy className="h-3.5 w-3.5" />
-            Duplicate to {toLabel}
+            {count === 1 ? `Duplicate to ${toLabel}` : `Duplicate ${count} here`}
           </Button>
           <Button
             size="sm"
@@ -253,7 +274,7 @@ function MoveOrDuplicateDialog({
             onClick={handleMove}
           >
             <ArrowRight className="h-3.5 w-3.5" />
-            Move to {toLabel}
+            {count === 1 ? `Move to ${toLabel}` : `Move ${count} here`}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -277,11 +298,25 @@ export default function TimelinePage() {
   // Auto-schedule dialog
   const [scheduleOpen, setScheduleOpen] = useState(false);
 
+  // Multi-select state
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+
   // Drag-and-drop state
-  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [draggingIds, setDraggingIds] = useState<string[]>([]);
   const [dragOverDate, setDragOverDate] = useState<string | null>(null);
-  const [pendingDrop, setPendingDrop] = useState<{ task: Task; fromDate: string; toDate: string } | null>(null);
+  const [pendingDrop, setPendingDrop] = useState<{ tasks: Task[]; fromDate: string; toDate: string } | null>(null);
   const dragFromDate = useRef<string>("");
+
+  const clearSelection = useCallback(() => setSelectedTaskIds(new Set()), []);
+
+  // Escape clears selection
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") clearSelection();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [clearSelection]);
 
   // Current time indicator — updates every minute, offset from START_HOUR
   const calcNowTop = () => {
@@ -343,9 +378,22 @@ export default function TimelinePage() {
     setAddOpen(true);
   };
 
-  const handleTaskClick = (task: Task) => {
-    setEditTask(task);
-    setEditOpen(true);
+  const handleTaskClick = (task: Task, e: React.MouseEvent) => {
+    if (draggingIds.length > 0) return;
+    if (e.ctrlKey || e.metaKey) {
+      // Ctrl/Cmd+click toggles selection without opening the dialog
+      setSelectedTaskIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(task.id)) next.delete(task.id);
+        else next.add(task.id);
+        return next;
+      });
+    } else {
+      // Regular click: clear selection and open edit dialog
+      clearSelection();
+      setEditTask(task);
+      setEditOpen(true);
+    }
   };
 
   const handleAddClose = () => {
@@ -393,6 +441,8 @@ export default function TimelinePage() {
     currentHour >= START_HOUR &&
     currentHour < END_HOUR;
 
+  const isDraggingAny = draggingIds.length > 0;
+
   return (
     <>
       <Header title="Timeline" subtitle={subtitleText} />
@@ -415,6 +465,21 @@ export default function TimelinePage() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Multi-select hint */}
+            {selectedTaskIds.size > 0 && (
+              <div className="flex items-center gap-1.5 rounded-md bg-primary/10 border border-primary/20 px-2.5 py-1 text-xs text-primary font-medium">
+                <CheckSquare className="h-3.5 w-3.5" />
+                {selectedTaskIds.size} selected — drag to move
+                <button
+                  className="ml-1 opacity-60 hover:opacity-100 transition-opacity"
+                  onClick={clearSelection}
+                  title="Clear selection (Esc)"
+                >
+                  ×
+                </button>
+              </div>
+            )}
+
             {/* Auto-schedule button */}
             <Button
               size="sm"
@@ -512,7 +577,7 @@ export default function TimelinePage() {
                         key={t.id}
                         className="text-[11px] font-medium px-1.5 py-0.5 rounded text-white truncate cursor-pointer hover:opacity-90 transition-opacity"
                         style={{ backgroundColor: bg }}
-                        onClick={() => handleTaskClick(t)}
+                        onClick={() => handleTaskClick(t, { ctrlKey: false, metaKey: false } as React.MouseEvent)}
                       >
                         {t.title}
                       </div>
@@ -599,9 +664,13 @@ export default function TimelinePage() {
                             height: ROW_H,
                           }}
                           onDoubleClick={() => handleSlotDblClick(day, h)}
+                          onClick={() => {
+                            // Clicking empty grid clears selection
+                            if (selectedTaskIds.size > 0) clearSelection();
+                          }}
                           title={`Double-click to add task at ${fmtHour(h)}`}
                           onDragOver={(e) => {
-                            if (draggingId) {
+                            if (isDraggingAny) {
                               e.preventDefault();
                               e.dataTransfer.dropEffect = "move";
                               setDragOverDate(dayStr);
@@ -615,17 +684,22 @@ export default function TimelinePage() {
                           }}
                           onDrop={(e) => {
                             e.preventDefault();
-                            const taskId = e.dataTransfer.getData("taskId");
+                            const taskIdsJson = e.dataTransfer.getData("taskIds");
                             const fromDate = dragFromDate.current;
-                            if (taskId && fromDate && fromDate !== dayStr) {
-                              const task = tasks.find((t) => t.id === taskId);
-                              if (task) setPendingDrop({ task, fromDate, toDate: dayStr });
+                            if (taskIdsJson && fromDate && fromDate !== dayStr) {
+                              const ids: string[] = JSON.parse(taskIdsJson);
+                              const droppedTasks = ids
+                                .map((id) => tasks.find((t) => t.id === id))
+                                .filter(Boolean) as Task[];
+                              if (droppedTasks.length > 0) {
+                                setPendingDrop({ tasks: droppedTasks, fromDate, toDate: dayStr });
+                              }
                             }
-                            setDraggingId(null);
+                            setDraggingIds([]);
                             setDragOverDate(null);
                           }}
                         >
-                          {!draggingId && (
+                          {!isDraggingAny && (
                             <span className="absolute inset-0 flex items-center justify-center text-[10px] text-primary/0 group-hover:text-primary/40 transition-colors pointer-events-none select-none">
                               double-click to add
                             </span>
@@ -650,7 +724,7 @@ export default function TimelinePage() {
                       </div>
 
                       {/* Drag-over highlight */}
-                      {dragOverDate === dayStr && draggingId && (
+                      {dragOverDate === dayStr && isDraggingAny && (
                         <div
                           className="absolute top-0 bottom-0 pointer-events-none z-[6] ring-2 ring-inset ring-primary/50 bg-primary/5 rounded-sm"
                           style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
@@ -682,7 +756,8 @@ export default function TimelinePage() {
                           // Always use priority colour; project shown as dot + name in subtitle
                           const bg = PRIORITY_CONFIG[task.priority].hex;
                           const isDone = task.status === "done";
-                          const isDragging = draggingId === task.id;
+                          const isSelected = selectedTaskIds.has(task.id);
+                          const isDraggingThis = draggingIds.includes(task.id);
 
                           return (
                             <div
@@ -690,17 +765,28 @@ export default function TimelinePage() {
                               draggable
                               onDragStart={(e) => {
                                 e.dataTransfer.effectAllowed = "move";
-                                e.dataTransfer.setData("taskId", task.id);
+                                // If this task is part of a multi-selection, drag all selected
+                                let idsToDrag: string[];
+                                if (isSelected && selectedTaskIds.size > 1) {
+                                  idsToDrag = Array.from(selectedTaskIds);
+                                } else {
+                                  idsToDrag = [task.id];
+                                  // Auto-select just this task
+                                  setSelectedTaskIds(new Set([task.id]));
+                                }
+                                e.dataTransfer.setData("taskIds", JSON.stringify(idsToDrag));
                                 dragFromDate.current = dayStr;
-                                setDraggingId(task.id);
+                                setDraggingIds(idsToDrag);
                               }}
-                              onDragEnd={() => { setDraggingId(null); setDragOverDate(null); }}
-                              onClick={() => !isDragging && handleTaskClick(task)}
+                              onDragEnd={() => { setDraggingIds([]); setDragOverDate(null); }}
+                              onClick={(e) => handleTaskClick(task, e)}
                               className={cn(
                                 "absolute rounded-md px-2 py-1.5 text-white cursor-grab active:cursor-grabbing z-10 shadow-sm overflow-hidden select-none",
                                 "hover:brightness-110 transition-all",
                                 isDone && "opacity-50",
-                                isDragging && "opacity-40 scale-[0.98]"
+                                isDraggingThis && "opacity-40 scale-[0.98]",
+                                // Selected ring
+                                isSelected && !isDraggingThis && "ring-2 ring-white ring-offset-1 ring-offset-transparent brightness-110"
                               )}
                               style={{
                                 left: `calc(${leftPct}% + 3px)`,
@@ -715,6 +801,9 @@ export default function TimelinePage() {
                                 {task.title}
                                 {task.pinnedTime && (
                                   <Pin className="h-2.5 w-2.5 shrink-0 opacity-80" aria-label="Pinned time" />
+                                )}
+                                {isSelected && (
+                                  <CheckSquare className="h-2.5 w-2.5 shrink-0 opacity-90 ml-auto" />
                                 )}
                               </p>
                               {durationMins >= 45 && (
@@ -780,10 +869,10 @@ export default function TimelinePage() {
       {/* Move / Duplicate dialog */}
       {pendingDrop && (
         <MoveOrDuplicateDialog
-          task={pendingDrop.task}
+          tasks={pendingDrop.tasks}
           fromDate={pendingDrop.fromDate}
           toDate={pendingDrop.toDate}
-          onClose={() => setPendingDrop(null)}
+          onClose={() => { setPendingDrop(null); clearSelection(); }}
         />
       )}
     </>
