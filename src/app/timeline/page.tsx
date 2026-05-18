@@ -378,10 +378,11 @@ export default function TimelinePage() {
     setAddOpen(true);
   };
 
-  const handleTaskClick = (task: Task, e: React.MouseEvent) => {
+  const handleTaskSelect = (task: Task, e: React.MouseEvent) => {
     if (draggingIds.length > 0) return;
+    e.stopPropagation(); // don't let slot-click clear selection
     if (e.ctrlKey || e.metaKey) {
-      // Ctrl/Cmd+click toggles selection without opening the dialog
+      // Ctrl/Cmd+click = add to / remove from multi-selection
       setSelectedTaskIds((prev) => {
         const next = new Set(prev);
         if (next.has(task.id)) next.delete(task.id);
@@ -389,11 +390,17 @@ export default function TimelinePage() {
         return next;
       });
     } else {
-      // Regular click: clear selection and open edit dialog
-      clearSelection();
-      setEditTask(task);
-      setEditOpen(true);
+      // Single click = select only this task
+      setSelectedTaskIds(new Set([task.id]));
     }
+  };
+
+  const handleTaskDblClick = (task: Task, e: React.MouseEvent) => {
+    e.stopPropagation(); // prevent slot dblclick from opening add form
+    if (draggingIds.length > 0) return;
+    clearSelection();
+    setEditTask(task);
+    setEditOpen(true);
   };
 
   const handleAddClose = () => {
@@ -466,10 +473,10 @@ export default function TimelinePage() {
 
           <div className="flex items-center gap-2">
             {/* Multi-select hint */}
-            {selectedTaskIds.size > 0 && (
+            {selectedTaskIds.size > 0 ? (
               <div className="flex items-center gap-1.5 rounded-md bg-primary/10 border border-primary/20 px-2.5 py-1 text-xs text-primary font-medium">
                 <CheckSquare className="h-3.5 w-3.5" />
-                {selectedTaskIds.size} selected — drag to move
+                {selectedTaskIds.size} selected — drag to move · double-click to edit
                 <button
                   className="ml-1 opacity-60 hover:opacity-100 transition-opacity"
                   onClick={clearSelection}
@@ -478,6 +485,10 @@ export default function TimelinePage() {
                   ×
                 </button>
               </div>
+            ) : (
+              <p className="text-[11px] text-muted-foreground hidden sm:block">
+                Click task to select · drag to move · double-click to edit
+              </p>
             )}
 
             {/* Auto-schedule button */}
@@ -577,7 +588,8 @@ export default function TimelinePage() {
                         key={t.id}
                         className="text-[11px] font-medium px-1.5 py-0.5 rounded text-white truncate cursor-pointer hover:opacity-90 transition-opacity"
                         style={{ backgroundColor: bg }}
-                        onClick={() => handleTaskClick(t, { ctrlKey: false, metaKey: false } as React.MouseEvent)}
+                        onClick={(e) => handleTaskSelect(t, e)}
+                        onDoubleClick={(e) => handleTaskDblClick(t, e)}
                       >
                         {t.title}
                       </div>
@@ -765,13 +777,12 @@ export default function TimelinePage() {
                               draggable
                               onDragStart={(e) => {
                                 e.dataTransfer.effectAllowed = "move";
-                                // If this task is part of a multi-selection, drag all selected
+                                // Drag all selected tasks; if this task isn't selected, drag just it
                                 let idsToDrag: string[];
-                                if (isSelected && selectedTaskIds.size > 1) {
+                                if (isSelected && selectedTaskIds.size >= 1) {
                                   idsToDrag = Array.from(selectedTaskIds);
                                 } else {
                                   idsToDrag = [task.id];
-                                  // Auto-select just this task
                                   setSelectedTaskIds(new Set([task.id]));
                                 }
                                 e.dataTransfer.setData("taskIds", JSON.stringify(idsToDrag));
@@ -779,7 +790,8 @@ export default function TimelinePage() {
                                 setDraggingIds(idsToDrag);
                               }}
                               onDragEnd={() => { setDraggingIds([]); setDragOverDate(null); }}
-                              onClick={(e) => handleTaskClick(task, e)}
+                              onClick={(e) => handleTaskSelect(task, e)}
+                              onDoubleClick={(e) => handleTaskDblClick(task, e)}
                               className={cn(
                                 "absolute rounded-md px-2 py-1.5 text-white cursor-grab active:cursor-grabbing z-10 shadow-sm overflow-hidden select-none",
                                 "hover:brightness-110 transition-all",
